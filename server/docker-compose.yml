@@ -1,0 +1,17 @@
+services:
+  credit-card-server:
+    build:
+      context: .
+      pull: false
+    image: creditcardserver
+    container_name: credit-card-server
+    restart: unless-stopped
+    ports:
+      - "2006:2006"
+    environment:
+      - PORT=2006
+      - DATA_DIR=/app/data
+      - TZ=Asia/Shanghai
+    volumes:
+      # 数据库文件持久化到宿主机，容器重建数据不丢失
+      - ./data:/app/data
