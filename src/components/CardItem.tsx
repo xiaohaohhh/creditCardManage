@@ -43,14 +43,21 @@ export function CardItem({ card, onClick }: CardItemProps) {
       className={`${colorClasses[card.color]} rounded-2xl p-5 text-white shadow-lg 
         active:scale-[0.98] transition-transform cursor-pointer`}
     >
-      {/* 顶部：银行和状态 */}
+      {/* 顶部：銀行和状态 */}
       <div className="flex justify-between items-start mb-4">
         <div>
           <p className="text-white/80 text-sm">{card.bank}</p>
           <p className="font-semibold text-lg">{card.name}</p>
         </div>
-        <div className={`${statusColors[billingInfo.status]} px-2 py-1 rounded-full text-xs font-medium`}>
-          {statusText[billingInfo.status]}
+        <div className="flex flex-col items-end gap-1">
+          {card.owner && (
+            <span className="bg-white/25 px-2 py-0.5 rounded-full text-xs font-medium">
+              {card.owner}
+            </span>
+          )}
+          <div className={`${statusColors[billingInfo.status]} px-2 py-1 rounded-full text-xs font-medium`}>
+            {statusText[billingInfo.status]}
+          </div>
         </div>
       </div>
       

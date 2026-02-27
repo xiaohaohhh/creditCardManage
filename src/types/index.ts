@@ -14,6 +14,7 @@ export interface CreditCard {
   cardFrontImage?: string; // 卡片正面照片 (Base64, 加密存储)
   cardBackImage?: string;  // 卡片背面照片 (Base64, 加密存储)
   notes?: string;         // 备注
+  owner?: string;          // 归属人（如：本人、配偶、父母等）
   // 同步相关
   syncId?: string;        // 服务器端ID
   lastSyncAt?: Date;      // 最后同步时间
@@ -47,6 +48,7 @@ export interface CardFormData {
   cardFrontImage?: string;
   cardBackImage?: string;
   notes?: string;
+  owner?: string;
 }
 
 // 账单周期信息

@@ -27,4 +27,14 @@ db.version(2).stores({
     }
   });
 });
+
+// 版本3：新增归属人字段
+db.version(3).stores({
+  cards: '++id, name, bank, owner, billingDay, paymentDueDay, syncId, isDeleted, createdAt, updatedAt',
+  settings: '++id'
+}).upgrade(tx => {
+  return tx.table('cards').toCollection().modify((card: Record<string, unknown>) => {
+    if (!card.owner) card.owner = '';
+  });
+});
 export { db };

@@ -35,6 +35,7 @@ type Card struct {
 	CreatedAt      int64       `json:"createdAt"`
 	UpdatedAt      int64       `json:"updatedAt"`
 	IV             string      `json:"iv,omitempty"`
+	Owner          string      `json:"owner,omitempty"`
 }
 
 // SyncRequest 同步请求
@@ -128,6 +129,7 @@ func initDB() {
 		card_back_image TEXT,
 		notes TEXT,
 		iv TEXT,
+		owner TEXT,
 		is_deleted INTEGER DEFAULT 0,
 		created_at INTEGER,
 		updated_at INTEGER
@@ -141,6 +143,9 @@ func initDB() {
 		log.Fatal("创建表失败:", err)
 	}
 	
+	// 迁移：若旧数据库缺少 owner 列，自动添加（幂等操作）
+	_, _ = db.Exec(`ALTER TABLE cards ADD COLUMN owner TEXT DEFAULT ''`)
+
 	log.Println("数据库初始化完成")
 }
 
@@ -187,7 +192,7 @@ func getCards(c *gin.Context) {
 	rows, err := db.Query(`
 		SELECT id, sync_id, name, bank, card_number, cvv, expiry_date, 
 		       cardholder_name, credit_limit, billing_day, payment_due_day,
-		       color, card_front_image, card_back_image, notes, iv,
+		       color, card_front_image, card_back_image, notes, iv, owner,
 		       is_deleted, created_at, updated_at
 		FROM cards WHERE is_deleted = 0
 		ORDER BY updated_at DESC
@@ -207,7 +212,7 @@ func getCards(c *gin.Context) {
 			&card.CardNumber, &card.CVV, &card.ExpiryDate,
 			&card.CardholderName, &card.CreditLimit, &card.BillingDay,
 			&card.PaymentDueDay, &card.Color, &card.CardFrontImage,
-			&card.CardBackImage, &card.Notes, &card.IV,
+			&card.CardBackImage, &card.Notes, &card.IV, &card.Owner,
 			&isDeleted, &card.CreatedAt, &card.UpdatedAt,
 		)
 		if err != nil {
@@ -282,14 +287,14 @@ func insertCard(card Card) error {
 		INSERT INTO cards (
 			id, sync_id, name, bank, card_number, cvv, expiry_date,
 			cardholder_name, credit_limit, billing_day, payment_due_day,
-			color, card_front_image, card_back_image, notes, iv,
+			color, card_front_image, card_back_image, notes, iv, owner,
 			is_deleted, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		card.ID, card.SyncID, card.Name, card.Bank, card.CardNumber,
 		card.CVV, card.ExpiryDate, card.CardholderName, card.CreditLimit,
 		card.BillingDay, card.PaymentDueDay, card.Color, card.CardFrontImage,
-		card.CardBackImage, card.Notes, card.IV, 0, card.CreatedAt, card.UpdatedAt,
+		card.CardBackImage, card.Notes, card.IV, card.Owner, 0, card.CreatedAt, card.UpdatedAt,
 	)
 	return err
 }
@@ -299,9 +304,9 @@ func upsertCard(card Card) error {
 		INSERT INTO cards (
 			id, sync_id, name, bank, card_number, cvv, expiry_date,
 			cardholder_name, credit_limit, billing_day, payment_due_day,
-			color, card_front_image, card_back_image, notes, iv,
+			color, card_front_image, card_back_image, notes, iv, owner,
 			is_deleted, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(sync_id) DO UPDATE SET
 			name = excluded.name,
 			bank = excluded.bank,
@@ -317,6 +322,7 @@ func upsertCard(card Card) error {
 			card_back_image = excluded.card_back_image,
 			notes = excluded.notes,
 			iv = excluded.iv,
+			owner = excluded.owner,
 			is_deleted = excluded.is_deleted,
 			updated_at = excluded.updated_at
 		WHERE excluded.updated_at > cards.updated_at
@@ -324,7 +330,7 @@ func upsertCard(card Card) error {
 		card.ID, card.SyncID, card.Name, card.Bank, card.CardNumber,
 		card.CVV, card.ExpiryDate, card.CardholderName, card.CreditLimit,
 		card.BillingDay, card.PaymentDueDay, card.Color, card.CardFrontImage,
-		card.CardBackImage, card.Notes, card.IV,
+		card.CardBackImage, card.Notes, card.IV, card.Owner,
 		boolToInt(card.IsDeleted), card.CreatedAt, card.UpdatedAt,
 	)
 	return err
@@ -334,7 +340,7 @@ func getCardsSince(since int64) []Card {
 	rows, err := db.Query(`
 		SELECT id, sync_id, name, bank, card_number, cvv, expiry_date,
 		       cardholder_name, credit_limit, billing_day, payment_due_day,
-		       color, card_front_image, card_back_image, notes, iv,
+		       color, card_front_image, card_back_image, notes, iv, owner,
 		       is_deleted, created_at, updated_at
 		FROM cards WHERE updated_at > ?
 		ORDER BY updated_at DESC
@@ -353,7 +359,7 @@ func getCardsSince(since int64) []Card {
 			&card.CardNumber, &card.CVV, &card.ExpiryDate,
 			&card.CardholderName, &card.CreditLimit, &card.BillingDay,
 			&card.PaymentDueDay, &card.Color, &card.CardFrontImage,
-			&card.CardBackImage, &card.Notes, &card.IV,
+			&card.CardBackImage, &card.Notes, &card.IV, &card.Owner,
 			&isDeleted, &card.CreatedAt, &card.UpdatedAt,
 		)
 		if err != nil {

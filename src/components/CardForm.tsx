@@ -31,7 +31,8 @@ const defaultFormData: CardFormData = {
   color: 'blue',
   cardFrontImage: '',
   cardBackImage: '',
-  notes: ''
+  notes: '',
+  owner: '',
 };
 
 // 格式化卡号（每4位加空格）
@@ -118,7 +119,8 @@ export function CardForm({ initialData, onSubmit, onCancel, submitText = '保存
         color: initialData.color,
         cardFrontImage: initialData.cardFrontImage || '',
         cardBackImage: initialData.cardBackImage || '',
-        notes: initialData.notes || ''
+        notes: initialData.notes || '',
+        owner: initialData.owner || '',
       });
     }
   }, [initialData]);
@@ -220,6 +222,13 @@ export function CardForm({ initialData, onSubmit, onCancel, submitText = '保存
           {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
         </div>
         
+
+      {/* 归属人 */}
+      <div className="col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">归属人</label>
+        <input type="text" value={formData.owner || ''} onChange={e => handleChange('owner', e.target.value)}
+          placeholder="如：本人、配偶、父母" className={inputClass} />
+      </div>
         <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">银行名称 *</label>
           <input type="text" value={formData.bank} onChange={e => handleChange('bank', e.target.value)}
@@ -302,7 +311,7 @@ export function CardForm({ initialData, onSubmit, onCancel, submitText = '保存
         <div className="grid grid-cols-2 gap-3">
           {/* 正面 */}
           <div>
-            <input ref={frontImageRef} type="file" accept="image/*" capture="environment"
+            <input ref={frontImageRef} type="file" accept="image/*"
               onChange={e => handleImageUpload(e, 'cardFrontImage')} className="hidden" />
             {formData.cardFrontImage ? (
               <div className="relative">
@@ -323,7 +332,7 @@ export function CardForm({ initialData, onSubmit, onCancel, submitText = '保存
           </div>
           {/* 背面 */}
           <div>
-            <input ref={backImageRef} type="file" accept="image/*" capture="environment"
+            <input ref={backImageRef} type="file" accept="image/*"
               onChange={e => handleImageUpload(e, 'cardBackImage')} className="hidden" />
             {formData.cardBackImage ? (
               <div className="relative">

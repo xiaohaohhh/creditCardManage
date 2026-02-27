@@ -23,6 +23,7 @@ export function useCards() {
       cardBackImage: formData.cardBackImage,
       notes: formData.notes?.trim(),
       isDeleted: false,
+      owner: formData.owner?.trim() || '',
       createdAt: now,
       updatedAt: now
     };
@@ -44,6 +45,7 @@ export function useCards() {
       cardFrontImage: formData.cardFrontImage,
       cardBackImage: formData.cardBackImage,
       notes: formData.notes?.trim(),
+      owner: formData.owner?.trim() || '',
       updatedAt: new Date()
     });
   };
