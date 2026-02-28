@@ -19,7 +19,7 @@ export function EditCardPage() {
         else navigate('/');
       });
     }
-  }, [id, getCard, navigate]);
+  }, [id]);
   
   const handleSubmit = async (data: CardFormData) => {
     if (id) {
