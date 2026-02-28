@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, CreditCard, Wallet, Settings, Users } from 'lucide-react';
+import { Plus, CreditCard, Wallet, Settings, Users, FileText } from 'lucide-react';
 import { useCards } from '../hooks/useCards';
 import { CardItem } from '../components/CardItem';
 import { formatCurrency } from '../utils/billing';
@@ -60,6 +60,12 @@ export function HomePage() {
             className="p-2 rounded-full bg-white/20 active:bg-white/30 transition-colors"
           >
             <Settings size={20} />
+          </button>
+          <button
+            onClick={() => navigate('/bills')}
+            className="p-2 rounded-full bg-white/20 active:bg-white/30 transition-colors"
+          >
+            <FileText size={20} />
           </button>
         </div>
 

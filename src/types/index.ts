@@ -15,6 +15,7 @@ export interface CreditCard {
   cardBackImage?: string;  // 卡片背面照片 (Base64, 加密存储)
   notes?: string;         // 备注
   owner?: string;          // 归属人（如：本人、配偶、父母等）
+  lastFour?: string;       // 卡号后4位明文（用于账单匹配）
   // 同步相关
   syncId?: string;        // 服务器端ID
   lastSyncAt?: Date;      // 最后同步时间
@@ -97,4 +98,29 @@ export interface SyncPayload {
   cards: CreditCard[];
   lastSyncAt: number;
   deviceId: string;
+}
+
+// 邮箱账单配置
+export interface EmailConfig {
+  email: string;      // 邮箱地址
+  password: string;   // 授权码
+  imapHost?: string;  // IMAP服务器，默认 imap.qq.com:993
+}
+
+// 账单记录
+export interface BillStatement {
+  id?: number;
+  cardSyncId: string;       // 关联信用卡的 syncId
+  emailUid: number;         // IMAP邮件UID
+  bank?: string;            // 银行名称
+  amount: number;           // 账单总额
+  currency: string;         // CNY/USD等
+  billDate?: string;        // 账单日期 YYYY-MM-DD
+  dueDate?: string;         // 还款截止日期 YYYY-MM-DD
+  minPayment?: number;      // 最低还款额
+  statementType?: string;   // text/html/pdf
+  matchedBy?: string;       // full_card/last_four/name
+  matchConfidence?: string; // high/medium/low/ambiguous
+  fetchedAt?: number;       // 拉取时间戳
+  rawContent?: string;      // 原始内容（可选）
 }
