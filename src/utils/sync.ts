@@ -122,6 +122,15 @@ class SyncService {
       // 获取本地所有卡片（包括已删除的）
       const localCards = await db.cards.toArray();
       
+      // 确保所有本地卡都有 syncId，没有的先写入再同步
+      for (const card of localCards) {
+        if (!card.syncId) {
+          const newSyncId = generateUUID();
+          await db.cards.update(card.id!, { syncId: newSyncId });
+          card.syncId = newSyncId;
+        }
+      }
+
       // 转换为同步格式
       const cardsToSync = localCards.map(card => ({
         ...card,
