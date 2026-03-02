@@ -13,6 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"mime"
+
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 	"github.com/emersion/go-message/mail"
@@ -203,7 +205,8 @@ func parseIMAPMessage(msg *imap.Message, section *imap.BodySectionName) *parsedB
 		if err != nil {
 			break
 		}
-		ct, _, _ := p.Header.ContentType()
+		rawCT := p.Header.Get("Content-Type")
+		ct, _, _ := mime.ParseMediaType(rawCT)
 		switch ct {
 		case "text/plain":
 			data, _ := io.ReadAll(p.Body)
