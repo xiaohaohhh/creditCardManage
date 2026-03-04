@@ -219,6 +219,11 @@ class SyncService {
         });
       }
     } else {
+      // 本地没有，且服务器标记为已删除 → 跳过（不添加已删除的卡片）
+      if (serverCard.isDeleted) {
+        return;
+      }
+      
       // 本地没有，添加新卡片
       await db.cards.add({
         ...serverCard,
