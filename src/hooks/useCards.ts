@@ -50,12 +50,28 @@ export function useCards() {
     });
   };
   
-  // 软删除，保留数据用于同步
+  // 软删除：更新本地 IndexedDB，同时通知服务器
   const deleteCard = async (id: number): Promise<void> => {
+    // 先获取 syncId
+    const card = await db.cards.get(id);
+    
+    // 更新本地
     await db.cards.update(id, {
       isDeleted: true,
       updatedAt: new Date()
     });
+
+    // 立即通知服务器软删除（有 syncId 才推送）
+    if (card?.syncId) {
+      const serverUrl = import.meta.env.VITE_API_URL || 'https://credit-api.xhxh.eu.org';
+      try {
+        await fetch(`${serverUrl}/api/v1/cards/${card.syncId}`, {
+          method: 'DELETE'
+        });
+      } catch {
+        // 网络失败不影响本地删除，下次备份时不会推送已删除卡
+      }
+    }
   };
   
   // 永久删除
