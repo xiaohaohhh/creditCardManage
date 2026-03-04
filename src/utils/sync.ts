@@ -102,14 +102,14 @@ class SyncService {
     }
   }
 
-  // 执行同步
+  // 备份到云端（单向推送：前端 → 服务器，不接受服务器返回数据）
   async sync(): Promise<{ success: boolean; error?: string }> {
     if (!this.serverUrl) {
       return { success: false, error: '未配置服务器地址' };
     }
 
     if (this.isSyncing) {
-      return { success: false, error: '同步进行中' };
+      return { success: false, error: '备份进行中' };
     }
 
     this.isSyncing = true;
@@ -119,10 +119,10 @@ class SyncService {
     });
 
     try {
-      // 获取本地所有卡片（包括已删除的）
-      const localCards = await db.cards.toArray();
-      
-      // 确保所有本地卡都有 syncId，没有的先写入再同步
+      // 只获取前端未删除的卡片
+      const localCards = await db.cards.filter(c => !c.isDeleted).toArray();
+
+      // 确保所有本地卡都有 syncId
       for (const card of localCards) {
         if (!card.syncId) {
           const newSyncId = generateUUID();
@@ -139,7 +139,7 @@ class SyncService {
         updatedAt: card.updatedAt instanceof Date ? Math.floor(card.updatedAt.getTime() / 1000) : card.updatedAt
       }));
 
-      // 发送同步请求
+      // 发送备份请求
       const response = await fetch(`${this.serverUrl}/api/v1/sync`, {
         method: 'POST',
         headers: {
@@ -160,12 +160,7 @@ class SyncService {
       const result: ApiResponse<{ cards: CreditCard[]; serverTime: number }> = await response.json();
 
       if (result.success && result.data) {
-        // 处理服务器返回的卡片
-        for (const serverCard of result.data.cards) {
-          await this.mergeServerCard(serverCard);
-        }
-
-        // 更新同步时间
+        // 只更新备份时间，不处理服务器返回的卡片数据
         this.lastSyncAt = result.data.serverTime;
         this.saveSyncState();
       }
@@ -181,8 +176,8 @@ class SyncService {
       return { success: true };
     } catch (error) {
       this.isSyncing = false;
-      const errorMessage = error instanceof Error ? error.message : '同步失败';
-      
+      const errorMessage = error instanceof Error ? error.message : '备份失败';
+
       this.notifyListeners({
         ...this.getSyncStatus(),
         isSyncing: false,
@@ -193,46 +188,6 @@ class SyncService {
     }
   }
 
-  // 合并服务器卡片到本地
-  private async mergeServerCard(serverCard: CreditCard) {
-    // 查找本地是否有对应卡片
-    const localCard = await db.cards
-      .filter(c => c.syncId === serverCard.syncId)
-      .first();
-
-    const serverUpdatedAt = typeof serverCard.updatedAt === 'number' 
-      ? serverCard.updatedAt 
-      : Math.floor(new Date(serverCard.updatedAt).getTime() / 1000);
-
-    if (localCard) {
-      const localUpdatedAt = localCard.updatedAt instanceof Date
-        ? Math.floor(localCard.updatedAt.getTime() / 1000)
-        : localCard.updatedAt;
-
-      // 服务器版本更新，更新本地
-      if (serverUpdatedAt > localUpdatedAt) {
-        await db.cards.update(localCard.id!, {
-          ...serverCard,
-          id: localCard.id,
-          createdAt: new Date((serverCard.createdAt as unknown as number) * 1000),
-          updatedAt: new Date(serverUpdatedAt * 1000)
-        });
-      }
-    } else {
-      // 本地没有，且服务器标记为已删除 → 跳过（不添加已删除的卡片）
-      if (serverCard.isDeleted) {
-        return;
-      }
-      
-      // 本地没有，添加新卡片
-      await db.cards.add({
-        ...serverCard,
-        id: undefined,
-        createdAt: new Date((serverCard.createdAt as unknown as number) * 1000),
-        updatedAt: new Date(serverUpdatedAt * 1000)
-      });
-    }
-  }
 
   // 强制全量同步
   async forceFullSync(): Promise<{ success: boolean; error?: string }> {

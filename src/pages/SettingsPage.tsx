@@ -238,7 +238,7 @@ export function SettingsPage() {
                     同步中...
                   </>
                 ) : (
-                  '立即同步'
+                  '备份到云端'
                 )}
               </button>
               
