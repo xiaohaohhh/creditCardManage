@@ -65,12 +65,13 @@ export function SettingsPage() {
     setSyncing(false);
   };
 
-  const handleForceSync = async () => {
+  const handleRestoreFromCloud = async () => {
+    if (!confirm('确定从云端恢复？本地卡片数据将被云端数据覆盖。')) return;
     setSyncing(true);
     setSyncError(null);
-    const result = await syncService.forceFullSync();
+    const result = await syncService.restoreFromCloud();
     if (!result.success) {
-      setSyncError(result.error || '同步失败');
+      setSyncError(result.error || '恢复失败');
     }
     setSyncing(false);
   };
@@ -243,16 +244,16 @@ export function SettingsPage() {
               </button>
               
               <button
-                onClick={handleForceSync}
+                onClick={handleRestoreFromCloud}
                 disabled={syncing}
                 className="w-full py-3 rounded-xl border border-gray-200 text-gray-600 
                   font-medium active:bg-gray-100 transition-colors disabled:opacity-50"
               >
-                强制全量同步
+                从云端恢复
               </button>
               
               <p className="text-xs text-gray-500 text-center">
-                强制同步会重新下载所有数据
+                从云端恢复会用服务器数据覆盖本地卡片
               </p>
             </div>
           </div>
@@ -344,7 +345,7 @@ export function SettingsPage() {
         {/* 关于 */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h2 className="font-medium text-gray-800 mb-2">关于</h2>
-          <p className="text-sm text-gray-500">信用卡管家 v1.0.0</p>
+          <p className="text-sm text-gray-500">信用卡管家 v1.1.0</p>
           <p className="text-xs text-gray-400 mt-1">数据本地加密存储，安全可靠</p>
         </div>
       </div>

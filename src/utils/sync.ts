@@ -119,8 +119,8 @@ class SyncService {
     });
 
     try {
-      // 获取所有卡片（包括已删除的），让服务器同步删除状态
-      const localCards = await db.cards.toArray();
+      // 只推送未删除的卡片（已删除的不推送，通过 DELETE API 单独处理）
+      const localCards = await db.cards.filter(c => !c.isDeleted).toArray();
 
       // 确保所有本地卡都有 syncId
       for (const card of localCards) {
@@ -189,11 +189,90 @@ class SyncService {
   }
 
 
-  // 强制全量同步
-  async forceFullSync(): Promise<{ success: boolean; error?: string }> {
-    this.lastSyncAt = 0;
-    this.saveSyncState();
-    return this.sync();
+  // 从云端恢复：拉取服务器上 is_deleted=0 的卡片到本地
+  async restoreFromCloud(): Promise<{ success: boolean; error?: string; count?: number }> {
+    if (!this.serverUrl) {
+      return { success: false, error: '未配置服务器地址' };
+    }
+
+    if (this.isSyncing) {
+      return { success: false, error: '恢复进行中' };
+    }
+
+    this.isSyncing = true;
+    this.notifyListeners({
+      ...this.getSyncStatus(),
+      isSyncing: true
+    });
+
+    try {
+      // 从服务器获取所有未删除的卡片
+      const response = await fetch(`${this.serverUrl}/api/v1/cards`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`服务器错误: ${response.status}`);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: ApiResponse<any[]> = await response.json();
+
+      if (!result.success || !result.data) {
+        throw new Error('服务器返回数据异常');
+      }
+
+      const serverCards = result.data;
+
+      // 清空本地所有卡片，然后写入云端数据
+      await db.cards.clear();
+
+      for (const sc of serverCards) {
+        await db.cards.add({
+          syncId: sc.syncId || '',
+          name: sc.name || '',
+          bank: sc.bank || '',
+          cardNumber: sc.cardNumber || '',
+          cvv: sc.cvv || '',
+          expiryDate: sc.expiryDate || '',
+          cardholderName: sc.cardholderName || '',
+          creditLimit: sc.creditLimit ?? 0,
+          billingDay: sc.billingDay ?? 1,
+          paymentDueDay: sc.paymentDueDay ?? 1,
+          color: sc.color || 'blue',
+          cardFrontImage: sc.cardFrontImage || '',
+          cardBackImage: sc.cardBackImage || '',
+          notes: sc.notes || '',
+          owner: sc.owner || '',
+          lastFour: sc.lastFour || '',
+          isDeleted: false,
+          createdAt: new Date((sc.createdAt || 0) * 1000),
+          updatedAt: new Date((sc.updatedAt || 0) * 1000)
+        });
+      }
+
+      this.isSyncing = false;
+      this.notifyListeners({
+        lastSyncAt: new Date(),
+        isSyncing: false,
+        error: null,
+        pendingChanges: 0
+      });
+
+      return { success: true, count: serverCards.length };
+    } catch (error) {
+      this.isSyncing = false;
+      const errorMessage = error instanceof Error ? error.message : '恢复失败';
+
+      this.notifyListeners({
+        ...this.getSyncStatus(),
+        isSyncing: false,
+        error: errorMessage
+      });
+
+      return { success: false, error: errorMessage };
+    }
   }
 }
 
