@@ -217,13 +217,13 @@ class SyncService {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result: ApiResponse<any[]> = await response.json();
+      const result = await response.json() as any;
 
-      if (!result.success || !result.data) {
-        throw new Error('服务器返回数据异常');
+      // 后端返回格式: {cards: [...]} 或 {success: true, data: [...]}
+      const serverCards = result.cards || result.data || [];
+      if (!serverCards || serverCards.length === 0) {
+        throw new Error('云端没有可恢复的卡片数据');
       }
-
-      const serverCards = result.data;
 
       // 清空本地所有卡片，然后写入云端数据
       await db.cards.clear();
