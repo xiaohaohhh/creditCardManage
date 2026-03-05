@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { logger } from './logger';
 import type { CreditCard, SyncStatus, ApiResponse } from '../types';
 
 // 兼容非安全上下文（HTTP+IP访问）的UUID生成
@@ -121,6 +122,7 @@ class SyncService {
     try {
       // 只推送未删除的卡片（已删除的不推送，通过 DELETE API 单独处理）
       const localCards = await db.cards.filter(c => !c.isDeleted).toArray();
+      logger.info('sync', `备份开始，本地未删除卡片: ${localCards.length} 张`);
 
       // 确保所有本地卡都有 syncId
       for (const card of localCards) {
@@ -206,11 +208,16 @@ class SyncService {
     });
 
     try {
+      logger.info('restore', '开始从云端恢复...');
+      logger.debug('restore', `请求 URL: ${this.serverUrl}/api/v1/cards`);
+
       // 从服务器获取所有未删除的卡片
       const response = await fetch(`${this.serverUrl}/api/v1/cards`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
+
+      logger.debug('restore', `响应状态: ${response.status}`);
 
       if (!response.ok) {
         throw new Error(`服务器错误: ${response.status}`);
@@ -218,10 +225,15 @@ class SyncService {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await response.json() as any;
+      logger.debug('restore', '服务器原始返回:', JSON.stringify(result).slice(0, 500));
+      logger.debug('restore', `返回字段: keys=${Object.keys(result).join(',')}`);
 
       // 后端返回格式: {cards: [...]} 或 {success: true, data: [...]}
       const serverCards = result.cards || result.data || [];
-      if (!serverCards || serverCards.length === 0) {
+      logger.debug('restore', `解析到卡片数: ${Array.isArray(serverCards) ? serverCards.length : 'not array'}`);
+
+      if (!Array.isArray(serverCards) || serverCards.length === 0) {
+        logger.warn('restore', '云端没有可恢复的卡片', { result });
         throw new Error('云端没有可恢复的卡片数据');
       }
 
