@@ -1,6 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import type { CreditCard, CardFormData } from '../types';
+
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 export function useCards() {
   // 只查询未删除的卡片
   const cards = useLiveQuery(() => 
@@ -23,6 +32,7 @@ export function useCards() {
       cardBackImage: formData.cardBackImage,
       notes: formData.notes?.trim(),
       isDeleted: false,
+      syncId: generateUUID(),
       owner: formData.owner?.trim() || '',
       createdAt: now,
       updatedAt: now

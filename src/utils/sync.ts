@@ -119,8 +119,8 @@ class SyncService {
     });
 
     try {
-      // 只获取前端未删除的卡片
-      const localCards = await db.cards.filter(c => !c.isDeleted).toArray();
+      // 获取所有卡片（包括已删除的），让服务器同步删除状态
+      const localCards = await db.cards.toArray();
 
       // 确保所有本地卡都有 syncId
       for (const card of localCards) {
