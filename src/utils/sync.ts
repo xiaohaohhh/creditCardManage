@@ -85,6 +85,18 @@ class SyncService {
     };
   }
 
+  // 重新加载本地保存的同步状态
+  reloadSyncState(): SyncStatus {
+    this.deviceId = localStorage.getItem('deviceId') || '';
+    if (!this.deviceId) {
+      this.initDeviceId();
+    }
+    this.loadSyncState();
+    const status = this.getSyncStatus();
+    this.notifyListeners(status);
+    return status;
+  }
+
   // 测试服务器连接
   async testConnection(url?: string): Promise<boolean> {
     const testUrl = url || this.serverUrl;

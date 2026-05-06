@@ -1,17 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff, Download, Upload } from 'lucide-react';
 import { syncService } from '../utils/sync';
+import { exportDatabaseAsJson, importDatabaseFromJson } from '../utils/dataExport';
 import type { SyncStatus } from '../types';
 
 export function SettingsPage() {
   const navigate = useNavigate();
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [serverUrl, setServerUrl] = useState(syncService.getServerUrl());
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<boolean | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(syncService.getSyncStatus());
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [exportError, setExportError] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importError, setImportError] = useState(false);
 
   // 邮箱配置
   const [emailAddress, setEmailAddress] = useState('');
@@ -75,6 +83,68 @@ export function SettingsPage() {
     }
     setSyncing(false);
   };
+
+  const handleExportDatabase = async () => {
+    setExporting(true);
+    setExportMessage(null);
+    setExportError(false);
+
+    try {
+      const result = await exportDatabaseAsJson();
+      setExportMessage(`导出成功：${result.tableCount} 个表，共 ${result.recordCount} 条记录，文件名 ${result.fileName}`);
+    } catch (error) {
+      setExportError(true);
+      setExportMessage(error instanceof Error ? error.message : '导出失败，请稍后重试');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleOpenImportPicker = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportDatabase = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    const shouldImport = confirm('导入会覆盖当前本地数据库和同步配置，确定继续吗？');
+    if (!shouldImport) return;
+
+    setImporting(true);
+    setImportMessage(null);
+    setImportError(false);
+
+    let backupFileName = '';
+
+    try {
+      const backupResult = await exportDatabaseAsJson({
+        filePrefix: 'credit-card-manager-pre-import-backup'
+      });
+      backupFileName = backupResult.fileName;
+      setExportError(false);
+      setExportMessage(`导入前已自动备份当前数据：${backupResult.fileName}`);
+
+      const result = await importDatabaseFromJson(file);
+      setServerUrl(localStorage.getItem('serverUrl') || '');
+      setSyncStatus(syncService.reloadSyncState());
+      navigate('/', {
+        state: {
+          importNotice: `导入成功：已自动备份当前数据为 ${backupFileName}，并恢复 ${result.tableCount} 个表、共 ${result.recordCount} 条记录（备份时间 ${new Date(result.exportedAt).toLocaleString('zh-CN')}）。`
+        }
+      });
+      return;
+    } catch (error) {
+      setImportError(true);
+      const baseMessage = error instanceof Error ? error.message : '导入失败，请检查文件格式';
+      setImportMessage(backupFileName ? `导入失败，但当前数据已自动备份为 ${backupFileName}。${baseMessage}` : baseMessage);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleTestEmailConfig = async () => {
     if (!emailAddress || !emailPassword) return;
     setEmailTesting(true);
@@ -258,6 +328,61 @@ export function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* 本地数据导入导出 */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Download size={20} className="text-gray-600" />
+            <h2 className="font-medium text-gray-800">本地数据导入导出</h2>
+          </div>
+
+          <p className="text-sm text-gray-500">
+            将 IndexedDB 中的卡片、设置以及本地同步配置导出为 JSON 文件，便于备份。
+          </p>
+          <p className="text-xs text-amber-600 mt-2">
+            导出文件可能包含敏感数据；导入前会先自动备份当前数据，然后再覆盖本地内容。
+          </p>
+
+          {exportMessage && (
+            <p className={`text-sm mt-3 ${exportError ? 'text-red-500' : 'text-green-600'}`}>
+              {exportMessage}
+            </p>
+          )}
+
+          <button
+            onClick={handleExportDatabase}
+            disabled={exporting}
+            className="w-full mt-4 py-3 rounded-xl border border-gray-200 text-gray-700 font-medium
+              active:bg-gray-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Download size={18} />
+            {exporting ? '导出中...' : '导出为 JSON'}
+          </button>
+
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={handleImportDatabase}
+          />
+
+          {importMessage && (
+            <p className={`text-sm mt-3 ${importError ? 'text-red-500' : 'text-green-600'}`}>
+              {importMessage}
+            </p>
+          )}
+
+          <button
+            onClick={handleOpenImportPicker}
+            disabled={importing}
+            className="w-full mt-3 py-3 rounded-xl border border-gray-200 text-gray-700 font-medium
+              active:bg-gray-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Upload size={18} />
+            {importing ? '导入中...' : '从 JSON 导入'}
+          </button>
+        </div>
 
         {/* 邮箱账单配置 */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">

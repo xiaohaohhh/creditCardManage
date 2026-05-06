@@ -26,7 +26,7 @@ export function BillsPage() {
       } else {
         setError(json.error || '加载失败');
       }
-    } catch (e) {
+    } catch {
       setError('无法连接到服务器，请检查网络或服务器配置');
     } finally {
       setLoading(false);
@@ -50,7 +50,7 @@ export function BillsPage() {
       } else {
         setError(json.error || '拉取失败');
       }
-    } catch (e) {
+    } catch {
       setError('无法连接到服务器');
     } finally {
       setFetching(false);

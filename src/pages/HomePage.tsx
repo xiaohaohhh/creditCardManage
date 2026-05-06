@@ -1,15 +1,21 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, CreditCard, Wallet, Settings, Users, FileText } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Plus, CreditCard, Wallet, Settings, Users, FileText, CheckCircle2, X } from 'lucide-react';
 import { useCards } from '../hooks/useCards';
 import { CardItem } from '../components/CardItem';
 import { formatCurrency } from '../utils/billing';
 import { getBillingInfo } from '../utils/billing';
 
+interface HomePageLocationState {
+  importNotice?: string;
+}
+
 export function HomePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { cards } = useCards();
   const [selectedOwner, setSelectedOwner] = useState<string>('全部');
+  const importNotice = (location.state as HomePageLocationState | null)?.importNotice;
 
   // 提取所有归属人列表（去重，过滤空值）
   const owners = useMemo(() => {
@@ -48,6 +54,10 @@ export function HomePage() {
 
   // Tab 列表：全部 + 各归属人
   const tabs = ['全部', ...owners];
+
+  const clearImportNotice = () => {
+    navigate(location.pathname, { replace: true, state: null });
+  };
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -90,6 +100,25 @@ export function HomePage() {
           </div>
         </div>
       </div>
+
+      {importNotice && (
+        <div className="px-5 pt-4">
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
+            <CheckCircle2 size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-green-800">导入完成，卡片列表已刷新</p>
+              <p className="text-sm text-green-700 mt-1">{importNotice}</p>
+            </div>
+            <button
+              onClick={clearImportNotice}
+              className="p-1 rounded-full text-green-500 active:bg-green-100 transition-colors"
+              aria-label="关闭导入提示"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 归属人筛选 Tab — 仅在有多个归属人时显示 */}
       {owners.length > 0 && (

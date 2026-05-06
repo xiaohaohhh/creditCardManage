@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import type { CreditCard, CardFormData } from '../types';
@@ -15,7 +16,7 @@ export function useCards() {
   const cards = useLiveQuery(() => 
     db.cards.filter(card => !card.isDeleted).toArray()
   ) ?? [];
-  const addCard = async (formData: CardFormData): Promise<number> => {
+  const addCard = useCallback(async (formData: CardFormData): Promise<number> => {
     const now = new Date();
     const card: Omit<CreditCard, 'id'> = {
       name: formData.name.trim(),
@@ -39,8 +40,8 @@ export function useCards() {
     };
     const id = await db.cards.add(card);
     return id as number;
-  };
-  const updateCard = async (id: number, formData: CardFormData): Promise<void> => {
+  }, []);
+  const updateCard = useCallback(async (id: number, formData: CardFormData): Promise<void> => {
     await db.cards.update(id, {
       name: formData.name.trim(),
       bank: formData.bank.trim(),
@@ -58,10 +59,10 @@ export function useCards() {
       owner: formData.owner?.trim() || '',
       updatedAt: new Date()
     });
-  };
+  }, []);
   
   // 软删除：更新本地 IndexedDB，同时通知服务器
-  const deleteCard = async (id: number): Promise<void> => {
+  const deleteCard = useCallback(async (id: number): Promise<void> => {
     // 先获取 syncId
     const card = await db.cards.get(id);
     
@@ -82,20 +83,20 @@ export function useCards() {
         // 网络失败不影响本地删除，下次备份时不会推送已删除卡
       }
     }
-  };
+  }, []);
   
   // 永久删除
-  const permanentDeleteCard = async (id: number): Promise<void> => {
+  const permanentDeleteCard = useCallback(async (id: number): Promise<void> => {
     await db.cards.delete(id);
-  };
-  const getCard = async (id: number): Promise<CreditCard | undefined> => {
+  }, []);
+  const getCard = useCallback(async (id: number): Promise<CreditCard | undefined> => {
     return await db.cards.get(id);
-  };
+  }, []);
   
   // 获取所有卡片（包括已删除，用于同步）
-  const getAllCards = async (): Promise<CreditCard[]> => {
+  const getAllCards = useCallback(async (): Promise<CreditCard[]> => {
     return await db.cards.toArray();
-  };
+  }, []);
   
   return { 
     cards, 

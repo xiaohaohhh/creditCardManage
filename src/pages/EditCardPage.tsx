@@ -19,7 +19,7 @@ export function EditCardPage() {
         else navigate('/');
       });
     }
-  }, [id]);
+  }, [getCard, id, navigate]);
   
   const handleSubmit = async (data: CardFormData) => {
     if (id) {
@@ -68,6 +68,7 @@ export function EditCardPage() {
       <div className="p-5">
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <CardForm
+            key={card.id ?? 'edit-card'}
             initialData={card}
             onSubmit={handleSubmit}
             onCancel={() => navigate(-1)}

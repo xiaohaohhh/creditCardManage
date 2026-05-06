@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Camera, X, Eye, EyeOff } from 'lucide-react';
 import type { CardFormData, CardColor, CreditCard } from '../types';
 
@@ -34,6 +34,29 @@ const defaultFormData: CardFormData = {
   notes: '',
   owner: '',
 };
+
+function createFormData(initialData?: CreditCard): CardFormData {
+  if (!initialData) {
+    return { ...defaultFormData };
+  }
+
+  return {
+    name: initialData.name,
+    bank: initialData.bank,
+    cardNumber: initialData.cardNumber || '',
+    cvv: initialData.cvv || '',
+    expiryDate: initialData.expiryDate || '',
+    cardholderName: initialData.cardholderName || '',
+    creditLimit: initialData.creditLimit.toString(),
+    billingDay: initialData.billingDay.toString(),
+    paymentDueDay: initialData.paymentDueDay.toString(),
+    color: initialData.color,
+    cardFrontImage: initialData.cardFrontImage || '',
+    cardBackImage: initialData.cardBackImage || '',
+    notes: initialData.notes || '',
+    owner: initialData.owner || '',
+  };
+}
 
 // 格式化卡号（每4位加空格）
 function formatCardNumber(value: string): string {
@@ -98,32 +121,11 @@ async function compressImage(file: File, maxSizeKB: number = 500): Promise<strin
 }
 
 export function CardForm({ initialData, onSubmit, onCancel, submitText = '保存' }: CardFormProps) {
-  const [formData, setFormData] = useState<CardFormData>(defaultFormData);
+  const [formData, setFormData] = useState<CardFormData>(() => createFormData(initialData));
   const [errors, setErrors] = useState<Partial<Record<keyof CardFormData, string>>>({});
   const frontImageRef = useRef<HTMLInputElement>(null);
   const backImageRef = useRef<HTMLInputElement>(null);
   const [showCvv, setShowCvv] = useState(false);
-
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        name: initialData.name,
-        bank: initialData.bank,
-        cardNumber: initialData.cardNumber || '',
-        cvv: initialData.cvv || '',
-        expiryDate: initialData.expiryDate || '',
-        cardholderName: initialData.cardholderName || '',
-        creditLimit: initialData.creditLimit.toString(),
-        billingDay: initialData.billingDay.toString(),
-        paymentDueDay: initialData.paymentDueDay.toString(),
-        color: initialData.color,
-        cardFrontImage: initialData.cardFrontImage || '',
-        cardBackImage: initialData.cardBackImage || '',
-        notes: initialData.notes || '',
-        owner: initialData.owner || '',
-      });
-    }
-  }, [initialData]);
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof CardFormData, string>> = {};
