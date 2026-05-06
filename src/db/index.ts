@@ -80,6 +80,7 @@ db.version(4).stores({
           syncId: accountSyncId,
           accountName: buildDefaultAccountName(bank, owner),
           bank,
+          owner,
           sharedLimit,
           billingDay,
           paymentDueDay,
@@ -111,6 +112,37 @@ db.version(4).stores({
         paymentDueDay,
       });
       card.accountSyncId = accountKeyToSyncId.get(accountKey) || generateSyncId();
+    }
+  });
+});
+
+// 版本5：共享账户增加归属人字段，用于限制只能选择同归属人的账户
+db.version(5).stores({
+  accounts: '++id, syncId, bank, owner, accountName, billingDay, paymentDueDay, createdAt, updatedAt',
+  cards: '++id, accountSyncId, name, owner, syncId, isDeleted, createdAt, updatedAt',
+  settings: '++id'
+}).upgrade(async tx => {
+  const cardRows = await tx.table('cards').toArray() as Record<string, unknown>[];
+
+  const accountOwnerMap = new Map<string, string>();
+  for (const card of cardRows) {
+    const accountSyncId = typeof card.accountSyncId === 'string' ? card.accountSyncId : '';
+    if (!accountSyncId || accountOwnerMap.has(accountSyncId)) {
+      continue;
+    }
+
+    accountOwnerMap.set(accountSyncId, typeof card.owner === 'string' ? card.owner.trim() : '');
+  }
+
+  await tx.table('accounts').toCollection().modify((account: Record<string, unknown>) => {
+    const syncId = typeof account.syncId === 'string' ? account.syncId : '';
+    if (!account.owner && syncId) {
+      account.owner = accountOwnerMap.get(syncId) || '';
+    }
+    if (!account.accountName) {
+      const bank = typeof account.bank === 'string' ? account.bank.trim() : '';
+      const owner = typeof account.owner === 'string' ? account.owner.trim() : '';
+      account.accountName = buildDefaultAccountName(bank, owner);
     }
   });
 });

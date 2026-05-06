@@ -16,6 +16,7 @@ function buildAccountFromForm(formData: CardFormData, syncId: string, now: Date)
     syncId,
     accountName: formData.accountName.trim() || buildDefaultAccountName(bank, owner),
     bank,
+    owner,
     sharedLimit: parseInt(formData.creditLimit, 10),
     billingDay: parseInt(formData.billingDay, 10),
     paymentDueDay: parseInt(formData.paymentDueDay, 10),
@@ -41,11 +42,21 @@ export function useCards() {
 
   const addCard = useCallback(async (formData: CardFormData): Promise<number> => {
     const now = new Date();
+    const owner = formData.owner?.trim() || '';
     let accountSyncId = formData.existingAccountSyncId?.trim() || '';
 
     if (formData.accountMode === 'existing') {
       if (!accountSyncId) {
         throw new Error('请选择共享额度账户');
+      }
+
+      const selectedAccount = await db.accounts.where('syncId').equals(accountSyncId).first();
+      if (!selectedAccount) {
+        throw new Error('共享额度账户不存在');
+      }
+
+      if (selectedAccount.bank.trim() !== formData.bank.trim() || (selectedAccount.owner || '') !== owner) {
+        throw new Error('只能选择同银行且同归属人的共享额度账户');
       }
     } else {
       accountSyncId = generateSyncId();
@@ -65,7 +76,7 @@ export function useCards() {
       notes: formData.notes?.trim(),
       isDeleted: false,
       syncId: generateSyncId(),
-      owner: formData.owner?.trim() || '',
+      owner,
       createdAt: now,
       updatedAt: now
     };
@@ -76,6 +87,7 @@ export function useCards() {
 
   const updateCard = useCallback(async (id: number, formData: CardFormData): Promise<void> => {
     const now = new Date();
+    const owner = formData.owner?.trim() || '';
     const existingCard = await db.cards.get(id);
 
     if (!existingCard) {
@@ -90,12 +102,21 @@ export function useCards() {
         throw new Error('请选择共享额度账户');
       }
 
+      const selectedAccount = await db.accounts.where('syncId').equals(nextAccountSyncId).first();
+      if (!selectedAccount) {
+        throw new Error('共享额度账户不存在');
+      }
+
+      if (selectedAccount.bank.trim() !== formData.bank.trim() || (selectedAccount.owner || '') !== owner) {
+        throw new Error('只能选择同银行且同归属人的共享额度账户');
+      }
+
       if (nextAccountSyncId === existingCard.accountSyncId) {
-        const currentAccount = await db.accounts.where('syncId').equals(nextAccountSyncId).first();
-        if (currentAccount?.id) {
-          await db.accounts.update(currentAccount.id, {
+        if (selectedAccount?.id) {
+          await db.accounts.update(selectedAccount.id, {
             accountName: formData.accountName.trim() || buildDefaultAccountName(formData.bank, formData.owner),
             bank: formData.bank.trim(),
+            owner,
             sharedLimit: parseInt(formData.creditLimit, 10),
             billingDay: parseInt(formData.billingDay, 10),
             paymentDueDay: parseInt(formData.paymentDueDay, 10),
@@ -119,7 +140,7 @@ export function useCards() {
       cardFrontImage: formData.cardFrontImage,
       cardBackImage: formData.cardBackImage,
       notes: formData.notes?.trim(),
-      owner: formData.owner?.trim() || '',
+      owner,
       updatedAt: now,
     });
   }, []);

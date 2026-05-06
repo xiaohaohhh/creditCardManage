@@ -4,6 +4,7 @@ export interface CreditAccount {
   syncId: string;          // 本地/云端共享账户唯一标识
   accountName: string;     // 账户名称，如“招行共享额度”
   bank: string;            // 银行名称
+  owner: string;           // 归属人，仅允许同归属人卡片复用
   sharedLimit: number;     // 共享总额度
   billingDay: number;      // 账单日 (1-28)
   paymentDueDay: number;   // 还款日 (1-28)

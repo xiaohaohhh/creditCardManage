@@ -37,7 +37,7 @@ const defaultFormData: CardFormData = {
   cardFrontImage: '',
   cardBackImage: '',
   notes: '',
-  owner: '',
+  owner: '本人',
 };
 
 function createFormData(initialData?: CreditCardWithAccount): CardFormData {
@@ -62,7 +62,7 @@ function createFormData(initialData?: CreditCardWithAccount): CardFormData {
     cardFrontImage: initialData.cardFrontImage || '',
     cardBackImage: initialData.cardBackImage || '',
     notes: initialData.notes || '',
-    owner: initialData.owner || '',
+    owner: initialData.owner || initialData.account.owner || '',
   };
 }
 
@@ -134,13 +134,19 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
   const backImageRef = useRef<HTMLInputElement>(null);
   const [showCvv, setShowCvv] = useState(false);
 
+  const normalizedBank = formData.bank.trim();
+  const normalizedOwner = formData.owner?.trim() || '';
+  const eligibleAccounts = normalizedBank && normalizedOwner
+    ? accounts.filter(account => account.bank.trim() === normalizedBank && (account.owner || '') === normalizedOwner)
+    : [];
   const selectedAccount = formData.existingAccountSyncId
     ? accounts.find(account => account.syncId === formData.existingAccountSyncId)
     : undefined;
   const isEditingCurrentAccount = !!initialData
     && formData.accountMode === 'existing'
     && formData.existingAccountSyncId === initialData.accountSyncId;
-  const sharedFieldsDisabled = formData.accountMode === 'existing' && !isEditingCurrentAccount;
+  const hasLockedExistingSelection = !!selectedAccount && !isEditingCurrentAccount;
+  const sharedFieldsDisabled = formData.accountMode === 'existing' && hasLockedExistingSelection;
 
   const applyAccountToForm = (account: CreditAccount) => {
     setFormData(prev => ({
@@ -149,6 +155,7 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
       existingAccountSyncId: account.syncId,
       accountName: account.accountName,
       bank: account.bank,
+      owner: account.owner,
       creditLimit: account.sharedLimit.toString(),
       billingDay: account.billingDay.toString(),
       paymentDueDay: account.paymentDueDay.toString(),
@@ -169,9 +176,9 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
 
     if (mode === 'existing') {
       const preferredAccount = initialData
-        ? accounts.find(account => account.syncId === initialData.accountSyncId)
+        ? eligibleAccounts.find(account => account.syncId === initialData.accountSyncId)
         : selectedAccount;
-      const fallbackAccount = preferredAccount || accounts[0];
+      const fallbackAccount = preferredAccount || eligibleAccounts[0];
 
       if (fallbackAccount) {
         applyAccountToForm(fallbackAccount);
@@ -182,7 +189,7 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
     setFormData(prev => ({
       ...prev,
       accountMode: mode,
-      existingAccountSyncId: mode === 'new' ? '' : prev.existingAccountSyncId,
+      existingAccountSyncId: '',
       accountName: mode === 'new' && !prev.accountName.trim()
         ? buildDefaultAccountName(prev.bank, prev.owner)
         : prev.accountName,
@@ -190,7 +197,16 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
   };
 
   const handleExistingAccountChange = (syncId: string) => {
-    const account = accounts.find(item => item.syncId === syncId);
+    if (!syncId) {
+      setFormData(prev => ({
+        ...prev,
+        existingAccountSyncId: '',
+        accountName: buildDefaultAccountName(prev.bank, prev.owner),
+      }));
+      return;
+    }
+
+    const account = eligibleAccounts.find(item => item.syncId === syncId);
     if (!account) return;
 
     applyAccountToForm(account);
@@ -202,6 +218,9 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof CardFormData, string>> = {};
 
+    if (!normalizedOwner) {
+      newErrors.owner = '请输入归属人';
+    }
     if (formData.accountMode === 'existing' && !formData.existingAccountSyncId) {
       newErrors.existingAccountSyncId = '请选择共享额度账户';
     }
@@ -249,7 +268,7 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
         accountName: formData.accountName.trim() || buildDefaultAccountName(formData.bank, formData.owner),
         bank: formData.bank.trim(),
         name: formData.name.trim(),
-        owner: formData.owner?.trim() || '',
+        owner: normalizedOwner,
         cardNumber: formData.cardNumber.replace(/\s/g, '')
       });
     }
@@ -266,7 +285,32 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
       processedValue = value.replace(/\D/g, '').slice(0, 4);
     }
     
-    setFormData(prev => ({ ...prev, [field]: processedValue }));
+    setFormData(prev => {
+      const nextFormData = { ...prev, [field]: processedValue };
+
+      if (
+        prev.accountMode === 'existing'
+        && (field === 'bank' || field === 'owner')
+        && prev.existingAccountSyncId
+        && !isEditingCurrentAccount
+      ) {
+        nextFormData.existingAccountSyncId = '';
+        nextFormData.accountName = buildDefaultAccountName(
+          field === 'bank' ? processedValue : nextFormData.bank,
+          field === 'owner' ? processedValue : nextFormData.owner
+        );
+      }
+
+      if (field === 'bank' && nextFormData.accountMode === 'new' && !nextFormData.accountName.trim()) {
+        nextFormData.accountName = buildDefaultAccountName(processedValue, nextFormData.owner);
+      }
+
+      if (field === 'owner' && nextFormData.accountMode === 'new' && !nextFormData.accountName.trim()) {
+        nextFormData.accountName = buildDefaultAccountName(nextFormData.bank, processedValue);
+      }
+
+      return nextFormData;
+    });
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
     }
@@ -302,6 +346,32 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
           <h3 className="text-sm font-semibold">共享额度账户</h3>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">归属人 *</label>
+          <input
+            type="text"
+            value={formData.owner || ''}
+            onChange={e => handleChange('owner', e.target.value)}
+            disabled={sharedFieldsDisabled}
+            placeholder="如：本人、配偶、父母"
+            className={`${inputClass} disabled:bg-gray-100 disabled:text-gray-500`}
+          />
+          {errors.owner && <p className="text-red-500 text-xs mt-1">{errors.owner}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">银行名称 *</label>
+          <input
+            type="text"
+            value={formData.bank}
+            onChange={e => handleChange('bank', e.target.value)}
+            disabled={sharedFieldsDisabled}
+            placeholder="如：招商银行"
+            className={`${inputClass} disabled:bg-gray-100 disabled:text-gray-500`}
+          />
+          {errors.bank && <p className="text-red-500 text-xs mt-1">{errors.bank}</p>}
+        </div>
+
         {accounts.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -335,20 +405,26 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
             <select
               value={formData.existingAccountSyncId || ''}
               onChange={e => handleExistingAccountChange(e.target.value)}
+              disabled={!normalizedBank || !normalizedOwner}
               className={inputClass}
             >
-              <option value="">请选择共享账户</option>
-              {accounts.map(account => (
+              <option value="">{normalizedBank && normalizedOwner ? '请选择共享账户' : '请先填写归属人和银行'}</option>
+              {eligibleAccounts.map(account => (
                 <option key={account.syncId} value={account.syncId}>
-                  {account.accountName} · {account.bank} · ¥{account.sharedLimit.toLocaleString('zh-CN')}
+                  {account.accountName} · {account.owner} · {account.bank} · ¥{account.sharedLimit.toLocaleString('zh-CN')}
                 </option>
               ))}
             </select>
             {errors.existingAccountSyncId && <p className="text-red-500 text-xs mt-1">{errors.existingAccountSyncId}</p>}
+            {normalizedBank && normalizedOwner && eligibleAccounts.length === 0 && (
+              <p className="text-xs text-amber-600 mt-2">
+                当前没有可复用的共享账户。只能选择同银行且同归属人的账户，不能选别人的。
+              </p>
+            )}
             <p className="text-xs text-gray-500 mt-2">
               {isEditingCurrentAccount
                 ? '当前正在编辑该共享账户的额度与还款规则，修改后会影响关联的所有卡片。'
-                : '选择已有共享账户后，新卡会沿用该账户的额度和账单规则，不会重复计入总额度。'}
+                : '系统只显示与当前卡片同银行、同归属人的共享账户；选择后不会重复计入总额度。'}
             </p>
           </div>
         )}
@@ -364,19 +440,6 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
             className={`${inputClass} disabled:bg-gray-100 disabled:text-gray-500`}
           />
           {errors.accountName && <p className="text-red-500 text-xs mt-1">{errors.accountName}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">银行名称 *</label>
-          <input
-            type="text"
-            value={formData.bank}
-            onChange={e => handleChange('bank', e.target.value)}
-            disabled={sharedFieldsDisabled}
-            placeholder="如：招商银行"
-            className={`${inputClass} disabled:bg-gray-100 disabled:text-gray-500`}
-          />
-          {errors.bank && <p className="text-red-500 text-xs mt-1">{errors.bank}</p>}
         </div>
 
         <div>
@@ -437,17 +500,6 @@ export function CardForm({ accounts = [], initialData, onSubmit, onCancel, submi
             className={inputClass}
           />
           {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
-        </div>
-
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">归属人</label>
-          <input
-            type="text"
-            value={formData.owner || ''}
-            onChange={e => handleChange('owner', e.target.value)}
-            placeholder="如：本人、配偶、父母"
-            className={inputClass}
-          />
         </div>
       </div>
 

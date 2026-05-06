@@ -54,6 +54,7 @@ export function buildSharedAccountKey(params: {
 function normalizeAccount(account: CreditAccount): CreditAccount {
   return {
     ...account,
+    owner: account.owner?.trim() || '',
     createdAt: parseStoredDate(account.createdAt),
     updatedAt: parseStoredDate(account.updatedAt),
   };
@@ -81,6 +82,7 @@ export function createAccountFromSyncCard(
     syncId: card.accountSyncId || fallbackSyncId || generateSyncId(),
     accountName: (card.accountName || '').trim() || buildDefaultAccountName(bank, owner),
     bank,
+    owner,
     sharedLimit: Number(card.creditLimit) || 0,
     billingDay: Number(card.billingDay) || 1,
     paymentDueDay: Number(card.paymentDueDay) || 1,
@@ -110,6 +112,7 @@ export function hydrateCardsWithAccounts(
     const fallbackAccount = createAccountFromSyncCard({
       accountSyncId: card.accountSyncId,
       bank: '未分组账户',
+      owner: card.owner,
       creditLimit: 0,
       billingDay: 1,
       paymentDueDay: 1,
@@ -143,7 +146,7 @@ export function flattenCardForSync(card: CreditCard, account: CreditAccount): Sy
     cardFrontImage: card.cardFrontImage,
     cardBackImage: card.cardBackImage,
     notes: card.notes,
-    owner: card.owner,
+    owner: card.owner || account.owner,
     lastFour: card.lastFour,
     isDeleted: card.isDeleted,
     createdAt: card.createdAt,
