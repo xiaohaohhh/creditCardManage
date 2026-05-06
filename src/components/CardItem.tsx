@@ -1,5 +1,5 @@
 import { CreditCard } from 'lucide-react';
-import type { CreditCard as CreditCardType, CardColor } from '../types';
+import type { CardColor, CreditCardWithAccount } from '../types';
 import { getBillingInfo, formatCurrency, formatDate } from '../utils/billing';
 // 格式化卡号显示（每4位一组）
 function formatCardNumber(cardNumber: string): string {
@@ -9,7 +9,7 @@ function formatCardNumber(cardNumber: string): string {
 }
 
 interface CardItemProps {
-  card: CreditCardType;
+  card: CreditCardWithAccount;
   onClick?: () => void;
 }
 
@@ -35,7 +35,7 @@ const statusText = {
 };
 
 export function CardItem({ card, onClick }: CardItemProps) {
-  const billingInfo = getBillingInfo(card.billingDay, card.paymentDueDay);
+  const billingInfo = getBillingInfo(card.account.billingDay, card.account.paymentDueDay);
   
   return (
     <div
@@ -46,8 +46,9 @@ export function CardItem({ card, onClick }: CardItemProps) {
       {/* 顶部：銀行和状态 */}
       <div className="flex justify-between items-start mb-4">
         <div>
-          <p className="text-white/80 text-sm">{card.bank}</p>
+          <p className="text-white/80 text-sm">{card.account.bank}</p>
           <p className="font-semibold text-lg">{card.name}</p>
+          <p className="text-white/60 text-xs mt-1">{card.account.accountName}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           {card.owner && (
@@ -71,22 +72,22 @@ export function CardItem({ card, onClick }: CardItemProps) {
       
       {/* 额度 */}
       <div className="mb-4">
-        <p className="text-white/70 text-xs">信用额度</p>
-        <p className="text-2xl font-bold">{formatCurrency(card.creditLimit)}</p>
+        <p className="text-white/70 text-xs">共享额度</p>
+        <p className="text-2xl font-bold">{formatCurrency(card.account.sharedLimit)}</p>
       </div>
       
       {/* 底部：账单日和还款日 */}
       <div className="flex justify-between text-sm border-t border-white/20 pt-3">
         <div>
           <p className="text-white/70 text-xs">账单日</p>
-          <p className="font-medium">每月{card.billingDay}日</p>
+          <p className="font-medium">每月{card.account.billingDay}日</p>
           <p className="text-white/60 text-xs">
             下次: {formatDate(billingInfo.nextBillingDate)}
           </p>
         </div>
         <div className="text-right">
           <p className="text-white/70 text-xs">还款日</p>
-          <p className="font-medium">每月{card.paymentDueDay}日</p>
+          <p className="font-medium">每月{card.account.paymentDueDay}日</p>
           <p className="text-white/60 text-xs">
             {billingInfo.daysUntilPayment}天后还款
           </p>

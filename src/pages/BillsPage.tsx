@@ -171,7 +171,7 @@ export function BillsPage() {
         {/* 账单列表（按卡片分组） */}
         {!loading && Object.entries(grouped).map(([syncId, cardBills]) => {
           const card = getCard(syncId);
-          const cardName = card ? `${card.bank} · ${card.name}` : `未知卡片 (${syncId.slice(0, 8)}...)`;
+          const cardName = card ? `${card.account.bank} · ${card.name}` : `未知卡片 (${syncId.slice(0, 8)}...)`;
           const cardColor = card?.color || 'blue';
 
           const colorMap: Record<string, string> = {

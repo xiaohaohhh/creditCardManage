@@ -1,15 +1,25 @@
+// 共享额度账户（同一账户下的多张卡共用额度/账单日/还款日）
+export interface CreditAccount {
+  id?: number;
+  syncId: string;          // 本地/云端共享账户唯一标识
+  accountName: string;     // 账户名称，如“招行共享额度”
+  bank: string;            // 银行名称
+  sharedLimit: number;     // 共享总额度
+  billingDay: number;      // 账单日 (1-28)
+  paymentDueDay: number;   // 还款日 (1-28)
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // 信用卡数据类型
 export interface CreditCard {
   id?: number;
+  accountSyncId: string;   // 关联共享额度账户
   name: string;           // 卡片名称，如"招行信用卡"
-  bank: string;           // 银行名称
   cardNumber: string;     // 完整卡号 (加密存储)
   cvv: string;            // CVV码 (加密存储)
   expiryDate: string;     // 有效期 MM/YY
   cardholderName: string; // 持卡人姓名
-  creditLimit: number;    // 信用额度
-  billingDay: number;     // 账单日 (1-28)
-  paymentDueDay: number;  // 还款日 (1-28)
   color: CardColor;       // 卡片颜色主题
   cardFrontImage?: string; // 卡片正面照片 (Base64, 加密存储)
   cardBackImage?: string;  // 卡片背面照片 (Base64, 加密存储)
@@ -24,6 +34,10 @@ export interface CreditCard {
   updatedAt: Date;
 }
 
+export interface CreditCardWithAccount extends CreditCard {
+  account: CreditAccount;
+}
+
 // 加密数据包装类型
 export interface EncryptedData {
   ciphertext: string;     // Base64编码的密文
@@ -36,6 +50,9 @@ export type CardColor = 'blue' | 'purple' | 'green' | 'orange' | 'pink' | 'gray'
 
 // 表单数据类型
 export interface CardFormData {
+  accountMode: 'new' | 'existing';
+  existingAccountSyncId?: string;
+  accountName: string;
   name: string;
   bank: string;
   cardNumber: string;
@@ -93,9 +110,34 @@ export interface ApiResponse<T> {
   timestamp: number;
 }
 
+export interface SyncedCardRecord {
+  id?: number | string;
+  syncId?: string;
+  accountSyncId?: string;
+  accountName?: string;
+  name: string;
+  bank: string;
+  cardNumber: string;
+  cvv: string;
+  expiryDate: string;
+  cardholderName: string;
+  creditLimit: number;
+  billingDay: number;
+  paymentDueDay: number;
+  color: CardColor;
+  cardFrontImage?: string;
+  cardBackImage?: string;
+  notes?: string;
+  owner?: string;
+  lastFour?: string;
+  isDeleted?: boolean;
+  createdAt: Date | number;
+  updatedAt: Date | number;
+}
+
 // 同步数据包
 export interface SyncPayload {
-  cards: CreditCard[];
+  cards: SyncedCardRecord[];
   lastSyncAt: number;
   deviceId: string;
 }

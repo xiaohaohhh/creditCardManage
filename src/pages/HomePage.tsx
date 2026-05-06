@@ -34,21 +34,26 @@ export function HomePage() {
     return cards.filter(card => (card.owner?.trim() || '') === selectedOwner);
   }, [cards, selectedOwner]);
 
-  // 计算筛选后的总额度
-  const totalLimit = filteredCards.reduce((sum, card) => sum + card.creditLimit, 0);
+  // 计算筛选后的总额度（同一共享账户只计一次）
+  const totalLimit = useMemo(() => {
+    const accountMap = new Map(
+      filteredCards.map(card => [card.account.syncId, card.account.sharedLimit])
+    );
+    return Array.from(accountMap.values()).reduce((sum, limit) => sum + limit, 0);
+  }, [filteredCards]);
 
   // 按还款日紧急程度排序
   const sortedCards = useMemo(() => {
     return [...filteredCards].sort((a, b) => {
-      const infoA = getBillingInfo(a.billingDay, a.paymentDueDay);
-      const infoB = getBillingInfo(b.billingDay, b.paymentDueDay);
+      const infoA = getBillingInfo(a.account.billingDay, a.account.paymentDueDay);
+      const infoB = getBillingInfo(b.account.billingDay, b.account.paymentDueDay);
       return infoA.daysUntilPayment - infoB.daysUntilPayment;
     });
   }, [filteredCards]);
 
   // 统计紧急还款的卡片数量（基于筛选后）
   const urgentCount = filteredCards.filter(card => {
-    const info = getBillingInfo(card.billingDay, card.paymentDueDay);
+    const info = getBillingInfo(card.account.billingDay, card.account.paymentDueDay);
     return info.status === 'urgent';
   }).length;
 

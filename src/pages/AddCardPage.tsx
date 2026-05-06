@@ -6,7 +6,7 @@ import type { CardFormData } from '../types';
 
 export function AddCardPage() {
   const navigate = useNavigate();
-  const { addCard } = useCards();
+  const { addCard, accounts } = useCards();
   
   const handleSubmit = async (data: CardFormData) => {
     await addCard(data);
@@ -30,6 +30,7 @@ export function AddCardPage() {
       <div className="p-5">
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <CardForm
+            accounts={accounts}
             onSubmit={handleSubmit}
             onCancel={() => navigate(-1)}
             submitText="添加"

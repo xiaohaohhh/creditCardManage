@@ -1,7 +1,10 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { CreditCard, UserSettings } from '../types';
+import type { CreditAccount, CreditCard, UserSettings } from '../types';
+import { buildDefaultAccountName, buildSharedAccountKey, generateSyncId, parseStoredDate } from '../utils/cardAccounts';
+
 // 定义数据库
 const db = new Dexie('CreditCardManager') as Dexie & {
+  accounts: EntityTable<CreditAccount, 'id'>;
   cards: EntityTable<CreditCard, 'id'>;
   settings: EntityTable<UserSettings, 'id'>;
 };
@@ -37,4 +40,79 @@ db.version(3).stores({
     if (!card.owner) card.owner = '';
   });
 });
-export { db };
+
+// 版本4：引入共享额度账户，将卡片与共享额度/账单规则拆分
+db.version(4).stores({
+  accounts: '++id, syncId, bank, accountName, billingDay, paymentDueDay, createdAt, updatedAt',
+  cards: '++id, accountSyncId, name, owner, syncId, isDeleted, createdAt, updatedAt',
+  settings: '++id'
+}).upgrade(async tx => {
+  const cardsTable = tx.table('cards');
+  const accountsTable = tx.table('accounts');
+  const cards = await cardsTable.toArray() as Record<string, unknown>[];
+  const accountKeyToSyncId = new Map<string, string>();
+  const accountsToAdd: CreditAccount[] = [];
+
+  for (const card of cards) {
+    const bank = typeof card.bank === 'string' ? card.bank.trim() : '';
+    const owner = typeof card.owner === 'string' ? card.owner.trim() : '';
+    const sharedLimit = typeof card.creditLimit === 'number' ? card.creditLimit : Number(card.creditLimit) || 0;
+    const billingDay = typeof card.billingDay === 'number' ? card.billingDay : Number(card.billingDay) || 1;
+    const paymentDueDay = typeof card.paymentDueDay === 'number' ? card.paymentDueDay : Number(card.paymentDueDay) || 1;
+    const createdAt = parseStoredDate(card.createdAt);
+    const updatedAt = parseStoredDate(card.updatedAt, createdAt);
+
+    let accountSyncId = typeof card.accountSyncId === 'string' ? card.accountSyncId : '';
+
+    if (!accountSyncId) {
+      const accountKey = buildSharedAccountKey({
+        bank,
+        owner,
+        sharedLimit,
+        billingDay,
+        paymentDueDay,
+      });
+      accountSyncId = accountKeyToSyncId.get(accountKey) || generateSyncId();
+      accountKeyToSyncId.set(accountKey, accountSyncId);
+
+      if (!accountsToAdd.some(account => account.syncId === accountSyncId)) {
+        accountsToAdd.push({
+          syncId: accountSyncId,
+          accountName: buildDefaultAccountName(bank, owner),
+          bank,
+          sharedLimit,
+          billingDay,
+          paymentDueDay,
+          createdAt,
+          updatedAt,
+        });
+      }
+    }
+
+    card.accountSyncId = accountSyncId;
+  }
+
+  if (accountsToAdd.length > 0) {
+    await accountsTable.bulkAdd(accountsToAdd);
+  }
+
+  await cardsTable.toCollection().modify((card: Record<string, unknown>) => {
+    if (!card.accountSyncId) {
+      const bank = typeof card.bank === 'string' ? card.bank.trim() : '';
+      const owner = typeof card.owner === 'string' ? card.owner.trim() : '';
+      const sharedLimit = typeof card.creditLimit === 'number' ? card.creditLimit : Number(card.creditLimit) || 0;
+      const billingDay = typeof card.billingDay === 'number' ? card.billingDay : Number(card.billingDay) || 1;
+      const paymentDueDay = typeof card.paymentDueDay === 'number' ? card.paymentDueDay : Number(card.paymentDueDay) || 1;
+      const accountKey = buildSharedAccountKey({
+        bank,
+        owner,
+        sharedLimit,
+        billingDay,
+        paymentDueDay,
+      });
+      card.accountSyncId = accountKeyToSyncId.get(accountKey) || generateSyncId();
+    }
+  });
+});
+
+ export { db };

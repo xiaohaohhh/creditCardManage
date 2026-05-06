@@ -36,18 +36,18 @@ type EmailConfig struct {
 // BillStatement 账单记录
 type BillStatement struct {
 	ID              int64   `json:"id"`
-	CardSyncID      string  `json:"cardSyncId"`      // 关联的信用卡 syncId
-	EmailUID        uint32  `json:"emailUid"`        // IMAP邮件UID（去重用）
-	Bank            string  `json:"bank"`            // 银行名称
-	Amount          float64 `json:"amount"`          // 账单总额
-	Currency        string  `json:"currency"`        // 货币（CNY/USD等）
-	BillDate        string  `json:"billDate"`        // 账单日期 YYYY-MM-DD
-	DueDate         string  `json:"dueDate"`         // 还款截止日期 YYYY-MM-DD
-	MinPayment      float64 `json:"minPayment"`      // 最低还款额
-	StatementType   string  `json:"statementType"`   // text/html/pdf
-	MatchedBy       string  `json:"matchedBy"`       // full_card/last_four/name
-	MatchConfidence string  `json:"matchConfidence"` // high/medium/low/ambiguous
-	FetchedAt       int64   `json:"fetchedAt"`       // 拉取时间戳
+	CardSyncID      string  `json:"cardSyncId"`           // 关联的信用卡 syncId
+	EmailUID        uint32  `json:"emailUid"`             // IMAP邮件UID（去重用）
+	Bank            string  `json:"bank"`                 // 银行名称
+	Amount          float64 `json:"amount"`               // 账单总额
+	Currency        string  `json:"currency"`             // 货币（CNY/USD等）
+	BillDate        string  `json:"billDate"`             // 账单日期 YYYY-MM-DD
+	DueDate         string  `json:"dueDate"`              // 还款截止日期 YYYY-MM-DD
+	MinPayment      float64 `json:"minPayment"`           // 最低还款额
+	StatementType   string  `json:"statementType"`        // text/html/pdf
+	MatchedBy       string  `json:"matchedBy"`            // full_card/last_four/name
+	MatchConfidence string  `json:"matchConfidence"`      // high/medium/low/ambiguous
+	FetchedAt       int64   `json:"fetchedAt"`            // 拉取时间戳
 	RawContent      string  `json:"rawContent,omitempty"` // 原始文本（可选返回）
 }
 
@@ -56,7 +56,7 @@ type parsedBill struct {
 	uid           uint32
 	from          string
 	subject       string
-	body          string   // 文本内容
+	body          string // 文本内容
 	statementType string
 
 	// 从邮件中提取的账单字段
@@ -281,20 +281,20 @@ var (
 
 // 银行关键词 → 银行名称映射
 var bankDomainMap = map[string]string{
-	"cmbchina":   "招商银行",
-	"icbc":       "工商银行",
-	"ccb":        "建设银行",
-	"abchina":    "农业银行",
-	"bankcomm":   "交通银行",
-	"spdb":       "浦发银行",
-	"cib":        "兴业银行",
-	"cmbc":       "民生银行",
-	"cgbchina":   "广发银行",
-	"pingan":     "平安银行",
-	"citic":      "中信银行",
-	"hxb":        "华夏银行",
-	"boc":        "中国银行",
-	"psbc":       "邮储银行",
+	"cmbchina": "招商银行",
+	"icbc":     "工商银行",
+	"ccb":      "建设银行",
+	"abchina":  "农业银行",
+	"bankcomm": "交通银行",
+	"spdb":     "浦发银行",
+	"cib":      "兴业银行",
+	"cmbc":     "民生银行",
+	"cgbchina": "广发银行",
+	"pingan":   "平安银行",
+	"citic":    "中信银行",
+	"hxb":      "华夏银行",
+	"boc":      "中国银行",
+	"psbc":     "邮储银行",
 }
 
 var bankSubjectMap = map[string]string{
@@ -632,8 +632,8 @@ func handleGetEmailConfig(c *gin.Context) {
 	if err != nil {
 		// 未配置，返回空
 		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"data":    nil,
+			"success":   true,
+			"data":      nil,
 			"timestamp": time.Now().Unix(),
 		})
 		return
@@ -721,7 +721,7 @@ func loadEmailConfig() (EmailConfig, error) {
 // getCardsAll 获取全部未删除卡片（不做分页，账单匹配用）
 func getCardsAll() []Card {
 	rows, err := db.Query(`
-		SELECT id, sync_id, name, bank, card_number, cvv, expiry_date,
+		SELECT id, sync_id, account_sync_id, account_name, name, bank, card_number, cvv, expiry_date,
 		       cardholder_name, credit_limit, billing_day, payment_due_day,
 		       color, card_front_image, card_back_image, notes, iv, owner, last_four,
 		       is_deleted, created_at, updated_at
@@ -736,7 +736,7 @@ func getCardsAll() []Card {
 		var card Card
 		var isDeleted int
 		err := rows.Scan(
-			&card.ID, &card.SyncID, &card.Name, &card.Bank,
+			&card.ID, &card.SyncID, &card.AccountSyncID, &card.AccountName, &card.Name, &card.Bank,
 			&card.CardNumber, &card.CVV, &card.ExpiryDate,
 			&card.CardholderName, &card.CreditLimit, &card.BillingDay,
 			&card.PaymentDueDay, &card.Color,

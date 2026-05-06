@@ -1,15 +1,12 @@
 import { db } from '../db';
 import { logger } from './logger';
-import type { CreditCard, SyncStatus, ApiResponse } from '../types';
-
-// 兼容非安全上下文（HTTP+IP访问）的UUID生成
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
+import {
+  buildSharedAccountKey,
+  createAccountFromSyncCard,
+  flattenCardForSync,
+  generateSyncId,
+} from './cardAccounts';
+import type { ApiResponse, CreditCard, CreditAccount, SyncStatus, SyncedCardRecord } from '../types';
 
 // 同步服务类
 class SyncService {
@@ -28,7 +25,7 @@ class SyncService {
   private initDeviceId() {
     let deviceId = localStorage.getItem('deviceId');
     if (!deviceId) {
-      deviceId = 'device_' + generateUUID();
+      deviceId = 'device_' + generateSyncId();
       localStorage.setItem('deviceId', deviceId);
     }
     this.deviceId = deviceId;
@@ -48,7 +45,7 @@ class SyncService {
 
   // 设置服务器地址
   setServerUrl(url: string) {
-    this.serverUrl = url.replace(/\/$/, ''); // 移除末尾斜杠
+    this.serverUrl = url.replace(/\/$/, '');
     this.saveSyncState();
   }
 
@@ -70,22 +67,19 @@ class SyncService {
     };
   }
 
-  // 通知监听器
   private notifyListeners(status: SyncStatus) {
     this.syncListeners.forEach(listener => listener(status));
   }
 
-  // 获取当前同步状态
   getSyncStatus(): SyncStatus {
     return {
       lastSyncAt: this.lastSyncAt ? new Date(this.lastSyncAt * 1000) : null,
       isSyncing: this.isSyncing,
       error: null,
-      pendingChanges: 0
+      pendingChanges: 0,
     };
   }
 
-  // 重新加载本地保存的同步状态
   reloadSyncState(): SyncStatus {
     this.deviceId = localStorage.getItem('deviceId') || '';
     if (!this.deviceId) {
@@ -97,7 +91,6 @@ class SyncService {
     return status;
   }
 
-  // 测试服务器连接
   async testConnection(url?: string): Promise<boolean> {
     const testUrl = url || this.serverUrl;
     if (!testUrl) return false;
@@ -105,7 +98,7 @@ class SyncService {
     try {
       const response = await fetch(`${testUrl}/api/v1/health`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       const data = await response.json();
       return data.status === 'ok';
@@ -115,7 +108,15 @@ class SyncService {
     }
   }
 
-  // 备份到云端（单向推送：前端 → 服务器，不接受服务器返回数据）
+  private async loadSyncSnapshot(): Promise<{ cards: CreditCard[]; accounts: CreditAccount[] }> {
+    const [cards, accounts] = await Promise.all([
+      db.cards.filter(card => !card.isDeleted).toArray(),
+      db.accounts.toArray(),
+    ]);
+
+    return { cards, accounts };
+  }
+
   async sync(): Promise<{ success: boolean; error?: string }> {
     if (!this.serverUrl) {
       return { success: false, error: '未配置服务器地址' };
@@ -128,53 +129,57 @@ class SyncService {
     this.isSyncing = true;
     this.notifyListeners({
       ...this.getSyncStatus(),
-      isSyncing: true
+      isSyncing: true,
     });
 
     try {
-      // 只推送未删除的卡片（已删除的不推送，通过 DELETE API 单独处理）
-      const localCards = await db.cards.filter(c => !c.isDeleted).toArray();
+      const { cards: localCards, accounts } = await this.loadSyncSnapshot();
       logger.info('sync', `备份开始，本地未删除卡片: ${localCards.length} 张`);
 
-      // 确保所有本地卡都有 syncId
       for (const card of localCards) {
         if (!card.syncId) {
-          const newSyncId = generateUUID();
+          const newSyncId = generateSyncId();
           await db.cards.update(card.id!, { syncId: newSyncId });
           card.syncId = newSyncId;
         }
       }
 
-      // 转换为同步格式
-      const cardsToSync = localCards.map(card => ({
-        ...card,
-        syncId: card.syncId || '',
-        createdAt: card.createdAt instanceof Date ? Math.floor(card.createdAt.getTime() / 1000) : card.createdAt,
-        updatedAt: card.updatedAt instanceof Date ? Math.floor(card.updatedAt.getTime() / 1000) : card.updatedAt
-      }));
+      const accountMap = new Map(accounts.map(account => [account.syncId, account]));
+      const cardsToSync: SyncedCardRecord[] = localCards.map(card => {
+        const account = accountMap.get(card.accountSyncId);
+        if (!account) {
+          throw new Error(`卡片 ${card.name} 缺少共享账户，无法同步`);
+        }
 
-      // 发送备份请求
+        const payload = flattenCardForSync(card, account);
+        return {
+          ...payload,
+          syncId: payload.syncId || '',
+          createdAt: payload.createdAt instanceof Date ? Math.floor(payload.createdAt.getTime() / 1000) : payload.createdAt,
+          updatedAt: payload.updatedAt instanceof Date ? Math.floor(payload.updatedAt.getTime() / 1000) : payload.updatedAt,
+        };
+      });
+
       const response = await fetch(`${this.serverUrl}/api/v1/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Device-ID': this.deviceId
+          'X-Device-ID': this.deviceId,
         },
         body: JSON.stringify({
           cards: cardsToSync,
           lastSyncAt: this.lastSyncAt,
-          deviceId: this.deviceId
-        })
+          deviceId: this.deviceId,
+        }),
       });
 
       if (!response.ok) {
         throw new Error(`服务器错误: ${response.status}`);
       }
 
-      const result: ApiResponse<{ cards: CreditCard[]; serverTime: number }> = await response.json();
+      const result: ApiResponse<{ cards: SyncedCardRecord[]; serverTime: number }> = await response.json();
 
       if (result.success && result.data) {
-        // 只更新备份时间，不处理服务器返回的卡片数据
         this.lastSyncAt = result.data.serverTime;
         this.saveSyncState();
       }
@@ -184,7 +189,7 @@ class SyncService {
         lastSyncAt: new Date(this.lastSyncAt * 1000),
         isSyncing: false,
         error: null,
-        pendingChanges: 0
+        pendingChanges: 0,
       });
 
       return { success: true };
@@ -195,15 +200,13 @@ class SyncService {
       this.notifyListeners({
         ...this.getSyncStatus(),
         isSyncing: false,
-        error: errorMessage
+        error: errorMessage,
       });
 
       return { success: false, error: errorMessage };
     }
   }
 
-
-  // 从云端恢复：拉取服务器上 is_deleted=0 的卡片到本地
   async restoreFromCloud(): Promise<{ success: boolean; error?: string; count?: number }> {
     if (!this.serverUrl) {
       return { success: false, error: '未配置服务器地址' };
@@ -216,17 +219,16 @@ class SyncService {
     this.isSyncing = true;
     this.notifyListeners({
       ...this.getSyncStatus(),
-      isSyncing: true
+      isSyncing: true,
     });
 
     try {
       logger.info('restore', '开始从云端恢复...');
       logger.debug('restore', `请求 URL: ${this.serverUrl}/api/v1/cards`);
 
-      // 从服务器获取所有未删除的卡片
       const response = await fetch(`${this.serverUrl}/api/v1/cards`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       logger.debug('restore', `响应状态: ${response.status}`);
@@ -240,8 +242,7 @@ class SyncService {
       logger.debug('restore', '服务器原始返回:', JSON.stringify(result).slice(0, 500));
       logger.debug('restore', `返回字段: keys=${Object.keys(result).join(',')}`);
 
-      // 后端返回格式: {cards: [...]} 或 {success: true, data: [...]}
-      const serverCards = result.cards || result.data || [];
+      const serverCards = result.cards || result.data?.cards || result.data || [];
       logger.debug('restore', `解析到卡片数: ${Array.isArray(serverCards) ? serverCards.length : 'not array'}`);
 
       if (!Array.isArray(serverCards) || serverCards.length === 0) {
@@ -249,42 +250,70 @@ class SyncService {
         throw new Error('云端没有可恢复的卡片数据');
       }
 
-      // 清空本地所有卡片，然后写入云端数据
-      await db.cards.clear();
+      const accountMap = new Map<string, CreditAccount>();
+      const legacyAccountKeyMap = new Map<string, string>();
+      const restoredCards: Omit<CreditCard, 'id'>[] = [];
 
-      for (const sc of serverCards) {
-        await db.cards.add({
-          syncId: sc.syncId || '',
-          name: sc.name || '',
-          bank: sc.bank || '',
-          cardNumber: sc.cardNumber || '',
-          cvv: sc.cvv || '',
-          expiryDate: sc.expiryDate || '',
-          cardholderName: sc.cardholderName || '',
-          creditLimit: sc.creditLimit ?? 0,
-          billingDay: sc.billingDay ?? 1,
-          paymentDueDay: sc.paymentDueDay ?? 1,
-          color: sc.color || 'blue',
-          cardFrontImage: sc.cardFrontImage || '',
-          cardBackImage: sc.cardBackImage || '',
-          notes: sc.notes || '',
-          owner: sc.owner || '',
-          lastFour: sc.lastFour || '',
+      for (const rawCard of serverCards as SyncedCardRecord[]) {
+        const legacyKey = buildSharedAccountKey({
+          bank: rawCard.bank || '',
+          owner: rawCard.owner || '',
+          sharedLimit: Number(rawCard.creditLimit) || 0,
+          billingDay: Number(rawCard.billingDay) || 1,
+          paymentDueDay: Number(rawCard.paymentDueDay) || 1,
+        });
+        const accountSyncId = rawCard.accountSyncId || legacyAccountKeyMap.get(legacyKey) || generateSyncId();
+        legacyAccountKeyMap.set(legacyKey, accountSyncId);
+
+        if (!accountMap.has(accountSyncId)) {
+          accountMap.set(accountSyncId, createAccountFromSyncCard({
+            ...rawCard,
+            accountSyncId,
+          }, accountSyncId));
+        }
+
+        restoredCards.push({
+          accountSyncId,
+          syncId: rawCard.syncId || '',
+          name: rawCard.name || '',
+          cardNumber: rawCard.cardNumber || '',
+          cvv: rawCard.cvv || '',
+          expiryDate: rawCard.expiryDate || '',
+          cardholderName: rawCard.cardholderName || '',
+          color: rawCard.color || 'blue',
+          cardFrontImage: rawCard.cardFrontImage || '',
+          cardBackImage: rawCard.cardBackImage || '',
+          notes: rawCard.notes || '',
+          owner: rawCard.owner || '',
+          lastFour: rawCard.lastFour || '',
           isDeleted: false,
-          createdAt: new Date((sc.createdAt || 0) * 1000),
-          updatedAt: new Date((sc.updatedAt || 0) * 1000)
+          createdAt: new Date((Number(rawCard.createdAt) || 0) * 1000),
+          updatedAt: new Date((Number(rawCard.updatedAt) || 0) * 1000),
         });
       }
+
+      await db.transaction('rw', db.accounts, db.cards, async () => {
+        await db.accounts.clear();
+        await db.cards.clear();
+
+        if (accountMap.size > 0) {
+          await db.accounts.bulkAdd(Array.from(accountMap.values()));
+        }
+
+        if (restoredCards.length > 0) {
+          await db.cards.bulkAdd(restoredCards);
+        }
+      });
 
       this.isSyncing = false;
       this.notifyListeners({
         lastSyncAt: new Date(),
         isSyncing: false,
         error: null,
-        pendingChanges: 0
+        pendingChanges: 0,
       });
 
-      return { success: true, count: serverCards.length };
+      return { success: true, count: restoredCards.length };
     } catch (error) {
       this.isSyncing = false;
       const errorMessage = error instanceof Error ? error.message : '恢复失败';
@@ -292,7 +321,7 @@ class SyncService {
       this.notifyListeners({
         ...this.getSyncStatus(),
         isSyncing: false,
-        error: errorMessage
+        error: errorMessage,
       });
 
       return { success: false, error: errorMessage };
@@ -300,5 +329,4 @@ class SyncService {
   }
 }
 
-// 导出单例
 export const syncService = new SyncService();

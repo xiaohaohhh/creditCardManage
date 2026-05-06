@@ -18,6 +18,8 @@ import (
 type Card struct {
 	ID             json.Number `json:"id"`
 	SyncID         string      `json:"syncId"`
+	AccountSyncID  string      `json:"accountSyncId"`
+	AccountName    string      `json:"accountName"`
 	Name           string      `json:"name"`
 	Bank           string      `json:"bank"`
 	CardNumber     string      `json:"cardNumber"`
@@ -104,14 +106,14 @@ func main() {
 
 func initDB() {
 	var err error
-	
+
 	// 数据目录
 	dataDir := os.Getenv("DATA_DIR")
 	if dataDir == "" {
 		dataDir = "./data"
 	}
 	os.MkdirAll(dataDir, 0755)
-	
+
 	dbPath := dataDir + "/cards.db"
 	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -123,6 +125,8 @@ func initDB() {
 	CREATE TABLE IF NOT EXISTS cards (
 		id TEXT PRIMARY KEY,
 		sync_id TEXT UNIQUE,
+		account_sync_id TEXT,
+		account_name TEXT,
 		name TEXT NOT NULL,
 		bank TEXT NOT NULL,
 		card_number TEXT,
@@ -146,13 +150,15 @@ func initDB() {
 	CREATE INDEX IF NOT EXISTS idx_updated_at ON cards(updated_at);
 	CREATE INDEX IF NOT EXISTS idx_sync_id ON cards(sync_id);
 	`
-	
+
 	_, err = db.Exec(createTableSQL)
 	if err != nil {
 		log.Fatal("创建表失败:", err)
 	}
-	
+
 	// 迁移：若旧数据库缺少 owner 列，自动添加（幂等操作）
+	_, _ = db.Exec(`ALTER TABLE cards ADD COLUMN account_sync_id TEXT DEFAULT ''`)
+	_, _ = db.Exec(`ALTER TABLE cards ADD COLUMN account_name TEXT DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE cards ADD COLUMN owner TEXT DEFAULT ''`)
 	_, _ = db.Exec(`ALTER TABLE cards ADD COLUMN last_four TEXT DEFAULT ''`)
 
@@ -179,7 +185,7 @@ func syncCards(c *gin.Context) {
 	}
 
 	serverTime := time.Now().Unix()
-	
+
 	// 处理客户端发来的卡片
 	for _, card := range req.Cards {
 		if card.SyncID == "" {
@@ -203,7 +209,7 @@ func syncCards(c *gin.Context) {
 
 func getCards(c *gin.Context) {
 	rows, err := db.Query(`
-		SELECT id, sync_id, name, bank, card_number, cvv, expiry_date, 
+		SELECT id, sync_id, account_sync_id, account_name, name, bank, card_number, cvv, expiry_date, 
 		       cardholder_name, credit_limit, billing_day, payment_due_day,
 		       color, card_front_image, card_back_image, notes, iv, owner, last_four,
 		       is_deleted, created_at, updated_at
@@ -221,7 +227,7 @@ func getCards(c *gin.Context) {
 		var card Card
 		var isDeleted int
 		err := rows.Scan(
-			&card.ID, &card.SyncID, &card.Name, &card.Bank,
+			&card.ID, &card.SyncID, &card.AccountSyncID, &card.AccountName, &card.Name, &card.Bank,
 			&card.CardNumber, &card.CVV, &card.ExpiryDate,
 			&card.CardholderName, &card.CreditLimit, &card.BillingDay,
 			&card.PaymentDueDay, &card.Color, &card.CardFrontImage,
@@ -261,7 +267,7 @@ func createCard(c *gin.Context) {
 
 func updateCard(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	var card Card
 	if err := c.ShouldBindJSON(&card); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -282,11 +288,11 @@ func updateCard(c *gin.Context) {
 
 func deleteCard(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	_, err := db.Exec(`
 		UPDATE cards SET is_deleted = 1, updated_at = ? WHERE id = ? OR sync_id = ?
 	`, time.Now().Unix(), id, id)
-	
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -298,13 +304,13 @@ func deleteCard(c *gin.Context) {
 func insertCard(card Card) error {
 	_, err := db.Exec(`
 		INSERT INTO cards (
-			id, sync_id, name, bank, card_number, cvv, expiry_date,
+			id, sync_id, account_sync_id, account_name, name, bank, card_number, cvv, expiry_date,
 			cardholder_name, credit_limit, billing_day, payment_due_day,
 			color, card_front_image, card_back_image, notes, iv, owner, last_four,
 			is_deleted, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
-		card.ID, card.SyncID, card.Name, card.Bank, card.CardNumber,
+		card.ID, card.SyncID, card.AccountSyncID, card.AccountName, card.Name, card.Bank, card.CardNumber,
 		card.CVV, card.ExpiryDate, card.CardholderName, card.CreditLimit,
 		card.BillingDay, card.PaymentDueDay, card.Color, card.CardFrontImage,
 		card.CardBackImage, card.Notes, card.IV, card.Owner, card.LastFour, 0, card.CreatedAt, card.UpdatedAt,
@@ -315,12 +321,14 @@ func insertCard(card Card) error {
 func upsertCard(card Card) error {
 	_, err := db.Exec(`
 		INSERT INTO cards (
-			id, sync_id, name, bank, card_number, cvv, expiry_date,
+			id, sync_id, account_sync_id, account_name, name, bank, card_number, cvv, expiry_date,
 			cardholder_name, credit_limit, billing_day, payment_due_day,
 			color, card_front_image, card_back_image, notes, iv, owner, last_four,
 			is_deleted, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(sync_id) DO UPDATE SET
+			account_sync_id = excluded.account_sync_id,
+			account_name = excluded.account_name,
 			name = excluded.name,
 			bank = excluded.bank,
 			card_number = excluded.card_number,
@@ -341,7 +349,7 @@ func upsertCard(card Card) error {
 			updated_at = excluded.updated_at
 		WHERE excluded.updated_at > cards.updated_at
 	`,
-		card.ID, card.SyncID, card.Name, card.Bank, card.CardNumber,
+		card.ID, card.SyncID, card.AccountSyncID, card.AccountName, card.Name, card.Bank, card.CardNumber,
 		card.CVV, card.ExpiryDate, card.CardholderName, card.CreditLimit,
 		card.BillingDay, card.PaymentDueDay, card.Color, card.CardFrontImage,
 		card.CardBackImage, card.Notes, card.IV, card.Owner, card.LastFour,
@@ -352,7 +360,7 @@ func upsertCard(card Card) error {
 
 func getCardsSince(since int64) []Card {
 	rows, err := db.Query(`
-		SELECT id, sync_id, name, bank, card_number, cvv, expiry_date,
+		SELECT id, sync_id, account_sync_id, account_name, name, bank, card_number, cvv, expiry_date,
 		       cardholder_name, credit_limit, billing_day, payment_due_day,
 		       color, card_front_image, card_back_image, notes, iv, owner, last_four,
 		       is_deleted, created_at, updated_at
@@ -369,7 +377,7 @@ func getCardsSince(since int64) []Card {
 		var card Card
 		var isDeleted int
 		err := rows.Scan(
-			&card.ID, &card.SyncID, &card.Name, &card.Bank,
+			&card.ID, &card.SyncID, &card.AccountSyncID, &card.AccountName, &card.Name, &card.Bank,
 			&card.CardNumber, &card.CVV, &card.ExpiryDate,
 			&card.CardholderName, &card.CreditLimit, &card.BillingDay,
 			&card.PaymentDueDay, &card.Color, &card.CardFrontImage,

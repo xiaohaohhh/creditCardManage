@@ -3,13 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { CardForm } from '../components/CardForm';
 import { useCards } from '../hooks/useCards';
-import type { CreditCard, CardFormData } from '../types';
+import type { CreditCardWithAccount, CardFormData } from '../types';
 
 export function EditCardPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { getCard, updateCard, deleteCard } = useCards();
-  const [card, setCard] = useState<CreditCard | null>(null);
+  const { accounts, getCard, updateCard, deleteCard } = useCards();
+  const [card, setCard] = useState<CreditCardWithAccount | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   useEffect(() => {
@@ -68,6 +68,7 @@ export function EditCardPage() {
       <div className="p-5">
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <CardForm
+            accounts={accounts}
             key={card.id ?? 'edit-card'}
             initialData={card}
             onSubmit={handleSubmit}

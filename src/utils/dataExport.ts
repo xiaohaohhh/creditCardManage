@@ -127,8 +127,24 @@ function normalizeSettings(rows: unknown[]): Record<string, unknown>[] {
   });
 }
 
+function normalizeAccounts(rows: unknown[]): Record<string, unknown>[] {
+  return rows.map(row => {
+    if (!isRecord(row)) {
+      throw new Error('导入文件中的共享账户数据格式无效');
+    }
+
+    return {
+      ...row,
+      createdAt: parseDate(row.createdAt),
+      updatedAt: parseDate(row.updatedAt)
+    };
+  });
+}
+
 function normalizeRowsForTable(tableName: string, rows: unknown[]): Record<string, unknown>[] {
   switch (tableName) {
+    case 'accounts':
+      return normalizeAccounts(rows);
     case 'cards':
       return normalizeCards(rows);
     case 'settings':
