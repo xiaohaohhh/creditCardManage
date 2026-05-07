@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { useCards } from '../hooks/useCards';
 import type { BillStatement } from '../types';
+import { toChineseErrorMessage } from '../utils/errorMessages';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://credit-api.xhxh.eu.org';
 
@@ -24,10 +25,10 @@ export function BillsPage() {
       if (json.success) {
         setBills(json.data || []);
       } else {
-        setError(json.error || '加载失败');
+        setError(toChineseErrorMessage(json.error, '加载失败，请稍后重试'));
       }
-    } catch {
-      setError('无法连接到服务器，请检查网络或服务器配置');
+    } catch (error) {
+      setError(toChineseErrorMessage(error, '无法连接到服务器，请检查网络或服务器配置'));
     } finally {
       setLoading(false);
     }
@@ -48,10 +49,10 @@ export function BillsPage() {
         setFetchResult(json.data);
         await loadBills();
       } else {
-        setError(json.error || '拉取失败');
+        setError(toChineseErrorMessage(json.error, '拉取失败，请稍后重试'));
       }
-    } catch {
-      setError('无法连接到服务器');
+    } catch (error) {
+      setError(toChineseErrorMessage(error, '无法连接到服务器'));
     } finally {
       setFetching(false);
     }

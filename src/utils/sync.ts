@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { getServerStatusMessage, toChineseErrorMessage } from './errorMessages';
 import { logger } from './logger';
 import {
   buildSharedAccountKey,
@@ -100,10 +101,14 @@ class SyncService {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
+      if (!response.ok) {
+        logger.warn('sync', '连接测试返回非成功状态', { url: testUrl, status: response.status });
+        return false;
+      }
       const data = await response.json();
       return data.status === 'ok';
     } catch (error) {
-      console.error('连接测试失败:', error);
+      logger.error('sync', '连接测试失败', error);
       return false;
     }
   }
@@ -174,7 +179,7 @@ class SyncService {
       });
 
       if (!response.ok) {
-        throw new Error(`服务器错误: ${response.status}`);
+        throw new Error(getServerStatusMessage(response.status));
       }
 
       const result: ApiResponse<{ cards: SyncedCardRecord[]; serverTime: number }> = await response.json();
@@ -182,6 +187,7 @@ class SyncService {
       if (result.success && result.data) {
         this.lastSyncAt = result.data.serverTime;
         this.saveSyncState();
+        logger.info('sync', `备份完成，服务器时间: ${result.data.serverTime}`);
       }
 
       this.isSyncing = false;
@@ -195,7 +201,8 @@ class SyncService {
       return { success: true };
     } catch (error) {
       this.isSyncing = false;
-      const errorMessage = error instanceof Error ? error.message : '备份失败';
+      const errorMessage = toChineseErrorMessage(error, '备份失败，请稍后重试');
+      logger.error('sync', '备份失败', error);
 
       this.notifyListeners({
         ...this.getSyncStatus(),
@@ -234,7 +241,7 @@ class SyncService {
       logger.debug('restore', `响应状态: ${response.status}`);
 
       if (!response.ok) {
-        throw new Error(`服务器错误: ${response.status}`);
+        throw new Error(getServerStatusMessage(response.status));
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -312,11 +319,13 @@ class SyncService {
         error: null,
         pendingChanges: 0,
       });
+      logger.info('restore', `云端恢复完成，共恢复 ${restoredCards.length} 张卡片`);
 
       return { success: true, count: restoredCards.length };
     } catch (error) {
       this.isSyncing = false;
-      const errorMessage = error instanceof Error ? error.message : '恢复失败';
+      const errorMessage = toChineseErrorMessage(error, '恢复失败，请稍后重试');
+      logger.error('restore', '云端恢复失败', error);
 
       this.notifyListeners({
         ...this.getSyncStatus(),

@@ -4,6 +4,7 @@ import { AddCardPage } from './pages/AddCardPage';
 import { EditCardPage } from './pages/EditCardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { BillsPage } from './pages/BillsPage';
+import { LogsPage } from './pages/LogsPage';
 function App() {
   return (
     <BrowserRouter>
@@ -13,6 +14,7 @@ function App() {
         <Route path="/edit/:id" element={<EditCardPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/bills" element={<BillsPage />} />
+        <Route path="/logs" element={<LogsPage />} />
       </Routes>
     </BrowserRouter>
   );

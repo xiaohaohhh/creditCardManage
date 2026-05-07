@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff, Download, Upload } from 'lucide-react';
+import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff, Download, Upload, FileText } from 'lucide-react';
 import { syncService } from '../utils/sync';
 import { exportDatabaseAsJson, importDatabaseFromJson } from '../utils/dataExport';
+import { toChineseErrorMessage } from '../utils/errorMessages';
 import type { SyncStatus } from '../types';
 
 export function SettingsPage() {
@@ -94,7 +95,7 @@ export function SettingsPage() {
       setExportMessage(`导出成功：${result.tableCount} 个表，共 ${result.recordCount} 条记录，文件名 ${result.fileName}`);
     } catch (error) {
       setExportError(true);
-      setExportMessage(error instanceof Error ? error.message : '导出失败，请稍后重试');
+      setExportMessage(toChineseErrorMessage(error, '导出失败，请稍后重试'));
     } finally {
       setExporting(false);
     }
@@ -138,7 +139,7 @@ export function SettingsPage() {
       return;
     } catch (error) {
       setImportError(true);
-      const baseMessage = error instanceof Error ? error.message : '导入失败，请检查文件格式';
+      const baseMessage = toChineseErrorMessage(error, '导入失败，请检查文件格式');
       setImportMessage(backupFileName ? `导入失败，但当前数据已自动备份为 ${backupFileName}。${baseMessage}` : baseMessage);
     } finally {
       setImporting(false);
@@ -158,10 +159,10 @@ export function SettingsPage() {
       });
       const json = await res.json();
       setEmailTestResult(json.success);
-      setEmailTestMsg(json.success ? '连接成功！' : (json.error || '连接失败'));
-    } catch {
+      setEmailTestMsg(json.success ? '连接成功！' : toChineseErrorMessage(json.error, '连接失败，请稍后重试'));
+    } catch (error) {
       setEmailTestResult(false);
-      setEmailTestMsg('无法连接到服务器');
+      setEmailTestMsg(toChineseErrorMessage(error, '无法连接到服务器'));
     } finally {
       setEmailTesting(false);
     }
@@ -172,15 +173,19 @@ export function SettingsPage() {
     setEmailSaving(true);
     setEmailSaved(false);
     try {
-      await fetch(`${API_BASE}/api/v1/email-config`, {
+      const response = await fetch(`${API_BASE}/api/v1/email-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: emailAddress, password: emailPassword, imapHost }),
       });
+      if (!response.ok) {
+        throw new Error(`服务器错误: ${response.status}`);
+      }
       setEmailSaved(true);
       setTimeout(() => setEmailSaved(false), 2000);
-    } catch {
-      // ignore
+    } catch (error) {
+      setEmailTestResult(false);
+      setEmailTestMsg(toChineseErrorMessage(error, '保存配置失败，请稍后重试'));
     } finally {
       setEmailSaving(false);
     }
@@ -381,6 +386,27 @@ export function SettingsPage() {
           >
             <Upload size={18} />
             {importing ? '导入中...' : '从 JSON 导入'}
+          </button>
+        </div>
+
+        {/* 诊断日志 */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText size={20} className="text-gray-600" />
+            <h2 className="font-medium text-gray-800">诊断日志</h2>
+          </div>
+
+          <p className="text-sm text-gray-500">
+            查看前端运行日志、同步日志和异常信息，便于排查“同步失败”或“恢复失败”等问题。
+          </p>
+
+          <button
+            onClick={() => navigate('/logs')}
+            className="w-full mt-4 py-3 rounded-xl border border-gray-200 text-gray-700 font-medium
+              active:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+          >
+            <FileText size={18} />
+            查看日志
           </button>
         </div>
 
