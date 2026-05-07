@@ -186,6 +186,23 @@ export function useCards() {
   const getAllCards = useCallback(async (): Promise<CreditCard[]> => {
     return await db.cards.toArray();
   }, []);
+
+  const deleteUnusedAccount = useCallback(async (accountSyncId: string): Promise<void> => {
+    const activeCardCount = await db.cards
+      .filter(card => !card.isDeleted && card.accountSyncId === accountSyncId)
+      .count();
+
+    if (activeCardCount > 0) {
+      throw new Error(`该共享账户仍有 ${activeCardCount} 张卡片在使用，无法删除`);
+    }
+
+    const account = await db.accounts.where('syncId').equals(accountSyncId).first();
+    if (!account?.id) {
+      throw new Error('共享账户不存在或已被删除');
+    }
+
+    await db.accounts.delete(account.id);
+  }, []);
   
   return { 
     cards, 
@@ -195,6 +212,7 @@ export function useCards() {
     deleteCard, 
     permanentDeleteCard,
     getCard,
-    getAllCards
+    getAllCards,
+    deleteUnusedAccount
   };
 }

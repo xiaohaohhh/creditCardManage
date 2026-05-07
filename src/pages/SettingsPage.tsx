@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff, Download, Upload, FileText } from 'lucide-react';
+import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff, Download, Upload, FileText, Wallet } from 'lucide-react';
 import { syncService } from '../utils/sync';
 import { exportDatabaseAsJson, importDatabaseFromJson } from '../utils/dataExport';
 import { toChineseErrorMessage } from '../utils/errorMessages';
@@ -407,6 +407,27 @@ export function SettingsPage() {
           >
             <FileText size={18} />
             查看日志
+          </button>
+        </div>
+
+        {/* 共享账户管理 */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Wallet size={20} className="text-gray-600" />
+            <h2 className="font-medium text-gray-800">共享账户管理</h2>
+          </div>
+
+          <p className="text-sm text-gray-500">
+            查看所有共享额度账户，并删除当前没有卡片在使用的无用账户。
+          </p>
+
+          <button
+            onClick={() => navigate('/accounts')}
+            className="w-full mt-4 py-3 rounded-xl border border-gray-200 text-gray-700 font-medium
+              active:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+          >
+            <Wallet size={18} />
+            管理共享账户
           </button>
         </div>
 

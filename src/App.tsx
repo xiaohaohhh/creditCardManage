@@ -5,6 +5,7 @@ import { EditCardPage } from './pages/EditCardPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { BillsPage } from './pages/BillsPage';
 import { LogsPage } from './pages/LogsPage';
+import { AccountManagePage } from './pages/AccountManagePage';
 function App() {
   return (
     <BrowserRouter>
@@ -15,6 +16,7 @@ function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/bills" element={<BillsPage />} />
         <Route path="/logs" element={<LogsPage />} />
+        <Route path="/accounts" element={<AccountManagePage />} />
       </Routes>
     </BrowserRouter>
   );
