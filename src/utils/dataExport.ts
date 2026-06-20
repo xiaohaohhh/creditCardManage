@@ -4,6 +4,8 @@ interface DatabaseExportResult {
   fileName: string;
   recordCount: number;
   tableCount: number;
+  fileSizeBytes: number;
+  imageSizeBytes: number;
 }
 
 interface DatabaseExportPayload {
@@ -31,6 +33,8 @@ interface DatabaseExportOptions {
   filePrefix?: string;
 }
 
+const IMAGE_FIELD_NAMES = ['cardFrontImage', 'cardBackImage'] as const;
+
 function createExportFileName(date: Date, filePrefix: string): string {
   const formatted = [
     date.getFullYear(),
@@ -45,6 +49,42 @@ function createExportFileName(date: Date, filePrefix: string): string {
   ].join('-');
 
   return `${filePrefix}-${formatted}_${time}.json`;
+}
+
+function getStringByteSize(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function getImagePayloadSize(tables: Record<string, unknown[]>): number {
+  const cards = tables.cards;
+
+  if (!Array.isArray(cards)) {
+    return 0;
+  }
+
+  return cards.reduce<number>((sum, row) => {
+    if (!isRecord(row)) {
+      return sum;
+    }
+
+    return sum + IMAGE_FIELD_NAMES.reduce<number>((fieldSum, fieldName) => {
+      const value = row[fieldName];
+      return fieldSum + (typeof value === 'string' ? getStringByteSize(value) : 0);
+    }, 0);
+  }, 0);
+}
+
+export function formatExportFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    const kb = bytes / 1024;
+    return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
 async function buildExportPayload(): Promise<DatabaseExportPayload> {
@@ -220,20 +260,23 @@ function restoreLocalStorageValue(key: string, value: string | null) {
 export async function exportDatabaseAsJson(options: DatabaseExportOptions = {}): Promise<DatabaseExportResult> {
   const exportDate = new Date();
   const payload = await buildExportPayload();
-  const jsonContent = JSON.stringify(payload, null, 2);
+  const jsonContent = JSON.stringify(payload);
   const fileName = createExportFileName(
     exportDate,
     options.filePrefix || 'credit-card-manager-export'
   );
   const recordCount = Object.values(payload.indexedDB.tables)
     .reduce((sum, rows) => sum + rows.length, 0);
+  const fileSizeBytes = getStringByteSize(jsonContent);
 
   downloadJsonFile(fileName, jsonContent);
 
   return {
     fileName,
     recordCount,
-    tableCount: Object.keys(payload.indexedDB.tables).length
+    tableCount: Object.keys(payload.indexedDB.tables).length,
+    fileSizeBytes,
+    imageSizeBytes: getImagePayloadSize(payload.indexedDB.tables)
   };
 }
 

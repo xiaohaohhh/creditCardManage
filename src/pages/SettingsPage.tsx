@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff, Download, Upload, FileText, Wallet } from 'lucide-react';
 import { syncService } from '../utils/sync';
-import { exportDatabaseAsJson, importDatabaseFromJson } from '../utils/dataExport';
+import { exportDatabaseAsJson, formatExportFileSize, importDatabaseFromJson } from '../utils/dataExport';
 import { toChineseErrorMessage } from '../utils/errorMessages';
 import type { SyncStatus } from '../types';
 
@@ -92,7 +92,10 @@ export function SettingsPage() {
 
     try {
       const result = await exportDatabaseAsJson();
-      setExportMessage(`导出成功：${result.tableCount} 个表，共 ${result.recordCount} 条记录，文件名 ${result.fileName}`);
+      const imageSizeText = result.imageSizeBytes > 0
+        ? `，图片字段约 ${formatExportFileSize(result.imageSizeBytes)}`
+        : '';
+      setExportMessage(`导出成功：${result.tableCount} 个表，共 ${result.recordCount} 条记录，文件约 ${formatExportFileSize(result.fileSizeBytes)}${imageSizeText}，文件名 ${result.fileName}`);
     } catch (error) {
       setExportError(true);
       setExportMessage(toChineseErrorMessage(error, '导出失败，请稍后重试'));
@@ -126,7 +129,7 @@ export function SettingsPage() {
       });
       backupFileName = backupResult.fileName;
       setExportError(false);
-      setExportMessage(`导入前已自动备份当前数据：${backupResult.fileName}`);
+      setExportMessage(`导入前已自动备份当前数据：${backupResult.fileName}（约 ${formatExportFileSize(backupResult.fileSizeBytes)}）`);
 
       const result = await importDatabaseFromJson(file);
       setServerUrl(localStorage.getItem('serverUrl') || '');
