@@ -1,4 +1,4 @@
-# 信用卡管家 (Credit Card Manager) v1.1.0
+# 信用卡管家 (Credit Card Manager) v1.1.1
 
 这是一个基于 React 19 + TypeScript + Vite 7 构建的渐进式 Web 应用 (PWA)，旨在帮助用户轻松管理多张信用卡的账单日和还款日，确保按时还款并优化额度使用。
 

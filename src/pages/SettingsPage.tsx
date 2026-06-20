@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Server, RefreshCw, Check, X, Cloud, CloudOff, Mail, Eye, EyeOff, Download, Upload, FileText, Wallet } from 'lucide-react';
 import { syncService } from '../utils/sync';
+import { APP_VERSION } from '../utils/appVersion';
 import { exportDatabaseAsJson, formatExportFileSize, importDatabaseFromJson } from '../utils/dataExport';
 import { toChineseErrorMessage } from '../utils/errorMessages';
 import type { SyncStatus } from '../types';
@@ -520,7 +521,7 @@ export function SettingsPage() {
         {/* 关于 */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h2 className="font-medium text-gray-800 mb-2">关于</h2>
-          <p className="text-sm text-gray-500">信用卡管家 v1.1.0</p>
+          <p className="text-sm text-gray-500">信用卡管家 v{APP_VERSION}</p>
           <p className="text-xs text-gray-400 mt-1">数据本地加密存储，安全可靠</p>
         </div>
       </div>

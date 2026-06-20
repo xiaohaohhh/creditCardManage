@@ -172,7 +172,7 @@ func healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "ok",
 		"timestamp": time.Now().Unix(),
-		"version":   "1.0.0",
+		"version":   "1.1.1",
 	})
 }
 
